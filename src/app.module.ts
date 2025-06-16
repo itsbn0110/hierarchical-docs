@@ -6,7 +6,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersModule } from './modules/users/users.module';
 import { TestModule } from './modules/tests/test.module';
 import { DatabaseLoggerService } from './common/database-logger.service';
-
+import { BullModule } from '@nestjs/bull';
+import { bullConfig } from './config/queue.config';
+import { TestQueueModule } from './queue/test-queue/test-queue.module';
 
 
 @Module({
@@ -28,8 +30,14 @@ import { DatabaseLoggerService } from './common/database-logger.service';
         synchronize: true
       })
     }),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: bullConfig
+    }),
     UsersModule,
-    TestModule
+    TestModule,
+    TestQueueModule
   ],
 
   controllers: [AppController],
