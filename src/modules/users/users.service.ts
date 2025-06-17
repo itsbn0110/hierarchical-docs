@@ -1,35 +1,34 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
-import { ObjectId } from 'mongodb';
+import { ObjectId, Repository } from 'typeorm';
 
 @Injectable()
 export class UsersService {
-  constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
+
+  constructor ( 
+    @InjectRepository(User) private readonly userRepository: Repository<User>
   ) {}
 
-  async findUserById(id: string): Promise<User | null> {
-    try {
-      if (!ObjectId.isValid(id)) {
-        return null;
-      }
-      return await this.userRepository.findOneBy({
-        _id: new ObjectId(id),
-      });
-    } catch (error) {
-      return null;
+  async findUserById(userId: string): Promise<User | null> {
+    console.log(userId);
+    if (!ObjectId.isValid(userId)) {
+      return null; 
     }
+
+    return this.userRepository.findOne({
+      where: {
+        _id: new ObjectId(userId) , 
+      },
+    });
   }
 
-  async findByUsername(username: string): Promise<User | null> {
-    try {
-      return await this.userRepository.findOneBy({ username });
-    } catch (error) {
-      return null;
-    }
+  async findByUserName ( username: string ) : Promise<User|null> {
+    return this.userRepository.findOne({
+      where: { username }
+    });
   }
 
   async findByEmail ( email: string ) : Promise<User|null> {
