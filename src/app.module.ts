@@ -9,7 +9,9 @@ import { DatabaseLoggerService } from './common/database-logger.service';
 import { BullModule } from '@nestjs/bull';
 import { bullConfig } from './config/queue.config';
 import { TestQueueModule } from './queue/test-queue/test-queue.module';
-
+import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
+import { APP_FILTER } from '@nestjs/core';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -36,11 +38,19 @@ import { TestQueueModule } from './queue/test-queue/test-queue.module';
       useFactory: bullConfig
     }),
     UsersModule,
+    AuthModule,
     TestModule,
     TestQueueModule
   ],
 
   controllers: [AppController],
-  providers: [AppService, DatabaseLoggerService],
+  providers: [
+    AppService, 
+    DatabaseLoggerService,
+    {
+      provide: APP_FILTER,
+      useClass: GlobalExceptionFilter
+    },
+  ],
 })
 export class AppModule {}
