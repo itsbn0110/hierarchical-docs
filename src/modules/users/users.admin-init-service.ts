@@ -26,14 +26,14 @@ export class AdminInitService implements OnModuleInit {
 
     const existedEmail = rootAdmin?.email;
 
-    if (!existedEmail) {
-      throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS, ErrorMessages.EMAIL_ALREADY_EXISTS, HttpStatus.BAD_REQUEST);
-    }
-
     if (!rootAdmin) {
       const email = this.configService.get<string>('ROOT_ADMIN_EMAIL');
       const username = this.configService.get<string>('ROOT_ADMIN_USERNAME');
       const password = this.configService.get<string>('ROOT_ADMIN_PASSWORD');
+
+      if (existedEmail) {
+        throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS, ErrorMessages.EMAIL_ALREADY_EXISTS, HttpStatus.BAD_REQUEST);
+      }
 
       if (!password) {
         throw new Error('ROOT_ADMIN_PASSWORD is not defined in environment variables');
