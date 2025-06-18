@@ -6,9 +6,17 @@ export const ErrorMessages = {
     TOKEN_EXPIRED: 'Phiên đăng nhập đã hết hạn',
     
     // User related
-    USERNAME_EXISTS: 'Tên đăng nhập đã tồn tại',
-    EMAIL_EXISTS: 'Email đã được sử dụng',
-    INVALID_PASSWORD: 'Định dạng mật khẩu không hợp lệ',
+    USERNAME_AREADY_EXISTS: 'Tên đăng nhập đã tồn tại',
+    EMAIL_ALREADY_EXISTS: 'Email đã được sử dụng',
+    INVALID_PASSWORD: 'Mật khẩu phải có ít nhất 8 ký tự',
+    INVALID_EMAIL: 'Email không đúng định dạng',
+    INVALID_USERNAME: 'Tên người dùng không hợp lệ',
+    USERNAME_REQUIRED: 'Tên người dùng không được để trống',
+    EMAIL_REQUIRED: 'Email không được để trống',
+    PASSWORD_REQUIRED: 'Mật khẩu không được để trống',
+    ROLE_REQUIRED: 'Vai trò không được để trống',
+    INVALID_ROLE: 'Vai trò không hợp lệ',
+    CANNOT_CREATE_USER: 'Tạo User mới thất bại!',
     
     // Permission related
     INSUFFICIENT_PERMISSIONS: 'Bạn không có đủ quyền để thực hiện hành động này',

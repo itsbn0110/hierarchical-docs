@@ -7,6 +7,9 @@ import { ApiOperation, ApiTags, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { LoginResponseDto } from './dto/login-response.dto';
 import { LoginDto } from './dto/login-request.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { Roles } from './decorators/roles.decorator';
+import { UserRole } from '../users/types/user-role.type';
+import { RolesGuard } from './guards/roles.guard';
 @Controller('auth')
 @ApiTags('auth')
 export class AuthController {
@@ -32,7 +35,8 @@ export class AuthController {
   }
 
   @ApiBearerAuth() 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ROOT_ADMIN)
   @ApiOperation({ summary: 'Lấy thông tin profile của người dùng hiện tại' })
   @Get('profile')
   getProfile(@Request() req: any) {

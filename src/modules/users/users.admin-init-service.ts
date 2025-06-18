@@ -1,10 +1,13 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { HttpStatus, Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { User } from "./entities/user.entity";
 import { Repository } from "typeorm";
 import { ConfigService } from "@nestjs/config";
 import { UserRole } from "./types/user-role.type";
 import * as bcrypt from 'bcrypt';
+import { BusinessException } from "src/common/filters/business.exception";
+import { ErrorCode } from "src/common/filters/constants/error-codes.enum";
+import { ErrorMessages } from "src/common/filters/constants/messages.constant";
 
 @Injectable()
 export class AdminInitService implements OnModuleInit {
@@ -20,6 +23,12 @@ export class AdminInitService implements OnModuleInit {
     const rootAdmin = await this.userRepository.findOne({
       where: { role: UserRole.ROOT_ADMIN },
     });
+
+    const existedEmail = rootAdmin?.email;
+
+    if (!existedEmail) {
+      throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS, ErrorMessages.EMAIL_ALREADY_EXISTS, HttpStatus.BAD_REQUEST);
+    }
 
     if (!rootAdmin) {
       const email = this.configService.get<string>('ROOT_ADMIN_EMAIL');

@@ -1,43 +1,71 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { LoginResponseDto } from '../auth/dto/login-response.dto';
-
-@ApiTags('Users')
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { UserRole } from '../users/types/user-role.type';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @Controller('users')
+@UseGuards(JwtAuthGuard,RolesGuard)
+@ApiBearerAuth() 
+@ApiTags('Users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @ApiOperation({ summary: 'Root Admin tạo mới người dùng' })
   @ApiResponse({ 
     status: 200, 
-    description: 'Đăng nhập thành công, trả về access token.',
-    type: LoginResponseDto, // Chỉ định DTO cho response để Swagger biết cấu trúc
+    description: 'Tạo người dùng thành công',
+    type: LoginResponseDto, // Nếu muốn mô tả response cụ thể hơn
   })
+  @Roles(UserRole.ROOT_ADMIN)
   @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  async create(@Body() createUserDto: CreateUserDto) {
+    const user = await this.usersService.create(createUserDto);
+    return {
+      success: true,
+      message: 'Tạo người dùng thành công',
+      data: user,
+    };
   }
 
+  @ApiOperation({ summary: 'Root Admin xem danh sách người dùng' })
+  @Roles(UserRole.ROOT_ADMIN)
   @Get()
   findAll() {
     return this.usersService.findAll();
   }
 
+  @ApiOperation({ summary: 'Root Admin xem chi tiết người dùng' })
+  @Roles(UserRole.ROOT_ADMIN)
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.usersService.findOne(+id);
+    return this.usersService.findOne(id);
   }
 
+  @ApiOperation({ summary: 'Root Admin cập nhật người dùng' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cập nhật người dùng thành công',
+  })
+  @Roles(UserRole.ROOT_ADMIN)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(+id, updateUserDto);
+  async updateUser(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    const user = await this.usersService.update(id, updateUserDto);
+    return {
+      success: true,
+      message: 'Cập nhật người dùng thành công',
+      data: user,
+    };
   }
 
+  @ApiOperation({ summary: 'Root Admin xóa người dùng' })
+  @Roles(UserRole.ROOT_ADMIN)
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.usersService.remove(+id);
+    return this.usersService.remove(id);
   }
 }
