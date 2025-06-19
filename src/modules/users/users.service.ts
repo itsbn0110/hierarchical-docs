@@ -17,34 +17,11 @@ export class UsersService {
     @InjectRepository(User) private readonly userRepository: Repository<User>
   ) {}
 
-  async findUserById(userId: string): Promise<User | null> {
-    if (!ObjectId.isValid(userId)) {
-      return null; 
-    }
-
-    return this.userRepository.findOne({
-      where: {
-        _id: new ObjectId(userId),
-      },
-    });
-  }
-
-  async findByUserName ( username: string ) : Promise<User|null> {
-    return this.userRepository.findOne({
-      where: { username }
-    });
-  }
-
-  async findByEmail ( email: string ) : Promise<User|null> {
-    return this.userRepository.findOne({
-      where: { email }
-    });
-  }
   async create(createUserDto: CreateUserDto) {
     const existingUser = await this.userRepository.findOne({ where: { email: createUserDto.email } });
     
     if (existingUser) {
-     throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS, ErrorMessages.EMAIL_ALREADY_EXISTS, HttpStatus.BAD_REQUEST);
+      throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS, ErrorMessages.EMAIL_ALREADY_EXISTS, HttpStatus.BAD_REQUEST);
     }
     
     const existingUsername = await this.userRepository.findOne({ where: { username: createUserDto.username } });
@@ -116,8 +93,48 @@ export class UsersService {
     return userWithoutPassword;
   }
 
+  async updateStatus(id: string, isActive: boolean): Promise<Omit<User, 'hashPassword'>> {
+    if (!ObjectId.isValid(id)) {
+      throw new BusinessException(ErrorCode.USER_NOT_FOUND, ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND);
+    }
+    const result = await this.userRepository.update({ _id: new ObjectId(id) }, { isActive });
+    if (result.affected === 0) {
+      throw new BusinessException(ErrorCode.USER_NOT_FOUND, ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND);
+    }
+    const updatedUser = await this.userRepository.findOne({ where: { _id: new ObjectId(id) } });
+    if (!updatedUser) {
+      throw new BusinessException(ErrorCode.USER_NOT_FOUND, ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND);
+    }
+    const { hashPassword, ...userWithoutPassword } = updatedUser;
+    return userWithoutPassword;
+  }
+
   remove(id: string) {
     // TODO: Xóa user theo id
     return this.userRepository.delete({ _id: new ObjectId(id) });
+  }
+
+  async findUserById(userId: string): Promise<User | null> {
+    if (!ObjectId.isValid(userId)) {
+      return null; 
+    }
+  
+    return this.userRepository.findOne({
+      where: {
+        _id: new ObjectId(userId),
+      },
+    });
+  }
+  
+  async findByUserName ( username: string ) : Promise<User|null> {
+    return this.userRepository.findOne({
+      where: { username }
+    });
+  }
+  
+  async findByEmail ( email: string ) : Promise<User|null> {
+    return this.userRepository.findOne({
+      where: { email }
+    });
   }
 }

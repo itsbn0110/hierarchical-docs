@@ -2,7 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { UsersService } from '../users/users.service';
+import { UsersService } from '../../users/users.service';
 import { BusinessException } from 'src/common/filters/business.exception';
 import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
 import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
@@ -21,6 +21,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     
     const user = await this.usersService.findUserById(userId);
     if (!user || !user.isActive) {
+     throw new BusinessException(ErrorCode.USER_NOT_FOUND, ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND );
+    }
+
+    if (user && !user.isActive) {
      throw new BusinessException(ErrorCode.USER_NOT_FOUND, ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND );
     }
     // 3. Trả về một đối tượng user. Đối tượng này sẽ được NestJS tự động

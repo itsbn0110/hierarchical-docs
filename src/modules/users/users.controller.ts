@@ -8,6 +8,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserRole } from '../users/types/user-role.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 @Controller('users')
 @UseGuards(JwtAuthGuard,RolesGuard)
 @ApiBearerAuth() 
@@ -67,5 +68,16 @@ export class UsersController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.usersService.remove(id);
+  }
+
+
+  @Patch(':id/status')
+  @UseGuards(JwtAuthGuard, RolesGuard) 
+  @Roles(UserRole.ROOT_ADMIN)
+  updateStatus(
+    @Param('id') id: string,
+    @Body() updateUserStatusDto: UpdateUserStatusDto,
+  ) {
+    return this.usersService.updateStatus(id, updateUserStatusDto.isActive);
   }
 }

@@ -17,7 +17,7 @@ export const ErrorMessages = {
     ROLE_REQUIRED: 'Vai trò không được để trống',
     INVALID_ROLE: 'Vai trò không hợp lệ',
     CANNOT_CREATE_USER: 'Tạo User mới thất bại!',
-    
+    ACCOUNT_DISABLED: 'Tài khoản của bạn đã bị vô hiệu hóa.',
     // Permission related
     INSUFFICIENT_PERMISSIONS: 'Bạn không có đủ quyền để thực hiện hành động này',
     ACCESS_DENIED: 'Từ chối truy cập vào tài nguyên này',

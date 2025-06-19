@@ -1,7 +1,11 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException, HttpStatus } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import { UserRole } from 'src/modules/users/types/user-role.type';
+import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
+import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
+import { BusinessException } from 'src/common/filters/business.exception';
+
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -20,7 +24,7 @@ export class RolesGuard implements CanActivate {
     const { user } = context.switchToHttp().getRequest();
 
     if (!user) { // Chỉ cần check user, role sẽ check sau
-      throw new ForbiddenException('Bạn không có quyền truy cập');
+      throw new BusinessException(ErrorCode.ACCESS_DENIED, ErrorMessages.ACCESS_DENIED, HttpStatus.FORBIDDEN);
     }
 
     // --- CẢI TIẾN 1: BYPASS CHO ROOT ADMIN ---

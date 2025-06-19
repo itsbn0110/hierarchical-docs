@@ -5,7 +5,8 @@ import { UsersModule } from '../users/users.module'; // Import UsersModule để
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtStrategy } from './jwt.strategy'; // Import Strategy của bạn
+import { JwtStrategy } from './strategies/jwt.strategy'; // Import Strategy của bạn
+import { LocalStrategy } from './strategies/local.strategy';
 
 @Module({
   imports: [
@@ -23,6 +24,6 @@ import { JwtStrategy } from './jwt.strategy'; // Import Strategy của bạn
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy], 
+  providers: [AuthService, JwtStrategy,LocalStrategy], 
 })
 export class AuthModule {}
