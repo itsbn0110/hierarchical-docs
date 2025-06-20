@@ -42,7 +42,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           message = message.join('. ');
         }
       } else {
-        message = res; // res là một string
+        message = typeof res === 'string' ? res : JSON.stringify(res); 
       }
     } 
     // 3. Bắt tất cả các lỗi còn lại (lỗi 500 không lường trước)

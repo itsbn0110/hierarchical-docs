@@ -1,14 +1,15 @@
+// src/users/entities/user.entity.ts
+
 import {
   Entity,
   ObjectIdColumn,
-  ObjectId,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
   Index,
 } from 'typeorm';
-
-import { UserRole } from '../types/user-role.type';
+import { ObjectId } from 'mongodb';
+import { UserRole } from 'src/common/enums/projects.enum';
 
 @Entity('users')
 export class User {
@@ -23,7 +24,7 @@ export class User {
   username: string;
 
   @Column()
-  hashPassword?: string;
+  hashPassword: string;
 
   @Column({
     type: 'enum',

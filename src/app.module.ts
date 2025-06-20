@@ -1,51 +1,61 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UsersModule } from './modules/users/users.module';
-import { TestModule } from './modules/tests/test.module';
-import { DatabaseLoggerService } from './common/database-logger.service';
 import { BullModule } from '@nestjs/bull';
-import { bullConfig } from './config/queue.config';
-import { TestQueueModule } from './queue/test-queue/test-queue.module';
-import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { APP_FILTER } from '@nestjs/core';
+
+// --- BƯỚC 1: IMPORT TƯỜNG MINH TẤT CẢ CÁC ENTITY ---
+import { User } from './modules/users/entities/user.entity';
+import { Node } from './modules/nodes/entities/node.entity';
+import { Permission } from './modules/permissions/entities/permission.entity';
+import { AccessRequest } from './modules/access-requests/entities/access-request.entity';
+// ----------------------------------------------------
+
+import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { NodesModule } from './modules/nodes/nodes.module';
+import { PermissionsModule } from './modules/permissions/permissions.module';
+import { AccessRequestsModule } from './modules/access-requests/access-requests.module';
+import { bullConfig } from './config/queue.config';
+import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-      isGlobal:true,
-      envFilePath: '.env'
+      isGlobal: true,
+      envFilePath: '.env',
     }),
-    TypeOrmModule.forRootAsync ({
+    TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        type: "mongodb",
+        type: 'mongodb',
         url: config.get<string>('MONGODB_URI'),
         useNewUrlParser: true,
         useUnifiedTopology: true,
         database: config.get<string>('MONGODB_DBNAME'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: true
-      })
+        entities: [User, Node, Permission, AccessRequest],
+        // -----------------------------------------------------------
+        
+        synchronize: true, // Chỉ nên dùng trong môi trường dev
+      }),
     }),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: bullConfig
+      useFactory: bullConfig,
     }),
+    // Thêm các module của bạn vào đây (sau khi đã tạo)
     UsersModule,
     AuthModule,
-    TestModule,
-    TestQueueModule
+    NodesModule,
+    PermissionsModule,
+    AccessRequestsModule,
   ],
-
   providers: [
-    DatabaseLoggerService,
     {
       provide: APP_FILTER,
-      useClass: GlobalExceptionFilter
+      useClass: GlobalExceptionFilter,
     },
   ],
 })

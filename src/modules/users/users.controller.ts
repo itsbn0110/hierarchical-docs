@@ -6,7 +6,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { LoginResponseDto } from '../auth/dto/login-response.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { UserRole } from '../users/types/user-role.type';
+import { UserRole } from 'src/common/enums/projects.enum';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 @Controller('users')
