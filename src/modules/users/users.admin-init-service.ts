@@ -3,7 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { User } from "./entities/user.entity";
 import { Repository } from "typeorm";
 import { ConfigService } from "@nestjs/config";
-import { UserRole } from "./types/user-role.type";
+import { UserRole } from "src/common/enums/projects.enum";
 import * as bcrypt from 'bcrypt';
 import { BusinessException } from "src/common/filters/business.exception";
 import { ErrorCode } from "src/common/filters/constants/error-codes.enum";

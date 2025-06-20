@@ -5,7 +5,7 @@ import { LoginResponseDto } from './dto/login-response.dto';
 import { LoginDto } from './dto/login-request.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Roles } from './decorators/roles.decorator';
-import { UserRole } from '../users/types/user-role.type';
+import { UserRole } from 'src/common/enums/projects.enum';
 import { RolesGuard } from './guards/roles.guard';
 import { AuthGuard } from '@nestjs/passport';
 

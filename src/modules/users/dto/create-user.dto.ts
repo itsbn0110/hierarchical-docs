@@ -1,7 +1,7 @@
 import { IsEmail, IsString, IsNotEmpty, MinLength, IsEnum, IsBoolean, IsOptional } from 'class-validator';
 import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
 
-import { UserRole } from '../types/user-role.type';
+import { UserRole } from 'src/common/enums/projects.enum';
 
 export class CreateUserDto {
   @IsString({ message: ErrorMessages.INVALID_USERNAME })

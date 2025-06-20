@@ -1,7 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException, HttpStatus } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
-import { UserRole } from 'src/modules/users/types/user-role.type';
+import { UserRole } from 'src/common/enums/projects.enum';
 import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
 import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
 import { BusinessException } from 'src/common/filters/business.exception';
