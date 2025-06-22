@@ -41,8 +41,7 @@ export class UsersService {
     });
     try {
       const savedUser = await this.userRepository.save(user);
-      const { hashPassword, ...result } = savedUser;
-      return result;
+      return savedUser;
     } catch (error) {
       throw new BusinessException(ErrorCode.CANNOT_CREATE_USER, ErrorMessages.CANNOT_CREATE_USER, HttpStatus.BAD_REQUEST);
     }
@@ -89,8 +88,7 @@ export class UsersService {
     if (!updatedUser) {
       throw new BusinessException(ErrorCode.USER_NOT_FOUND, ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND);
     }
-    const { hashPassword, ...userWithoutPassword } = updatedUser;
-    return userWithoutPassword;
+    return updatedUser;
   }
 
   async updateStatus(id: string, isActive: boolean): Promise<Omit<User, 'hashPassword'>> {
@@ -105,8 +103,7 @@ export class UsersService {
     if (!updatedUser) {
       throw new BusinessException(ErrorCode.USER_NOT_FOUND, ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND);
     }
-    const { hashPassword, ...userWithoutPassword } = updatedUser;
-    return userWithoutPassword;
+    return updatedUser;
   }
 
   remove(id: string) {

@@ -1,6 +1,6 @@
 // src/permissions/permissions.service.ts
 
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MongoRepository } from 'typeorm';
 import { ObjectId } from 'mongodb';
@@ -9,6 +9,7 @@ import { Permission } from './entities/permission.entity';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from 'src/common/enums/projects.enum';
 import { PermissionLevel } from 'src/common/enums/projects.enum';
+import { GrantPermissionDto } from './dto/grant-permissions.dto';
 @Injectable()
 export class PermissionsService {
   constructor(
@@ -58,13 +59,62 @@ export class PermissionsService {
     return userPermissionLevel >= requiredPermissionLevel;
   }
 
+
+  async findAllForUser(userId: ObjectId): Promise<Permission[]> {
+    return this.permissionRepository.find({ where: { userId } });
+  }
+
+  async findUserPermissionsForNodes(userId: ObjectId, nodeIds: ObjectId[]): Promise<Permission[]> {
+    if (nodeIds.length === 0) return [];
+    return this.permissionRepository.find({
+      where: {
+        userId,
+        nodeId: { $in: nodeIds } as any,
+      }
+    });
+  }
+
+
   /**
    * Cấp một quyền cụ thể
    */
-  async grant(permissionData: Partial<Permission>): Promise<Permission> {
-    // Logic này có thể cần kiểm tra xem bản ghi đã tồn tại chưa để tránh trùng lặp
-    const newPermission = this.permissionRepository.create(permissionData);
-    return this.permissionRepository.save(newPermission);
+   async grant(grantDto: GrantPermissionDto, granter: User): Promise<Permission> {
+    const { userId, nodeId, permission } = grantDto;
+    const granterId = granter._id;
+    const targetNodeId = new ObjectId(nodeId);
+
+    // --- 1. KIỂM TRA QUYỀN CỦA NGƯỜI ĐI CẤP QUYỀN ---
+    // Chỉ Owner hoặc Root Admin mới có quyền cấp quyền cho người khác
+    const isOwner = await this.checkUserPermissionForNode(
+      granter,
+      targetNodeId,
+      PermissionLevel.OWNER,
+    );
+    if (!isOwner) { // checkUserPermissionForNode đã xử lý cho Root Admin
+      throw new ForbiddenException('Chỉ chủ sở hữu mới có quyền cấp quyền cho mục này.');
+    }
+
+    // --- 2. KIỂM TRA XEM PERMISSION ĐÃ TỒN TẠI CHƯA ---
+    const targetUserId = new ObjectId(userId);
+    const existingPermission = await this.permissionRepository.findOne({
+      where: { userId: targetUserId, nodeId: targetNodeId },
+    });
+
+    if (existingPermission) {
+      // Nếu đã tồn tại, chỉ cần cập nhật lại cấp độ quyền
+      existingPermission.permission = permission;
+      existingPermission.grantedBy = granterId; // Cập nhật người cấp quyền mới nhất
+      return this.permissionRepository.save(existingPermission);
+    } else {
+      // Nếu chưa tồn tại, tạo một bản ghi mới
+      const newPermission = this.permissionRepository.create({
+        userId: targetUserId,
+        nodeId: targetNodeId,
+        permission: permission,
+        grantedBy: granterId,
+      });
+      return this.permissionRepository.save(newPermission);
+    }
   }
 
   /**
