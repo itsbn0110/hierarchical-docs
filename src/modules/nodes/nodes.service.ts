@@ -5,12 +5,19 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { MongoRepository } from 'typeorm';
 import { ObjectId } from 'mongodb';
 
-import { Node, Ancestor } from './entities/node.entity';
+import { Node } from './entities/node.entity';
 import { CreateNodeDto } from './dto/create-node.dto';
 import { User } from '../users/entities/user.entity';
 import { NodeType, UserRole } from 'src/common/enums/projects.enum';
 import { PermissionLevel } from 'src/common/enums/projects.enum';
 import { PermissionsService } from '../permissions/permissions.service';
+import { TreeNodeDto } from './dto/tree-node.dto';
+import { plainToInstance } from 'class-transformer';
+
+type Ancestor = {
+  _id: ObjectId;
+  name: string;
+};
 
 @Injectable()
 export class NodesService {
@@ -87,5 +94,59 @@ export class NodesService {
     );
 
     return newNode;
+  }
+
+
+  async getTreeForUser(parentId: string | null, user: User): Promise<TreeNodeDto[]> {
+    const parentObjectId = parentId ? new ObjectId(parentId) : null;
+    let nodes: Node[];
+
+    // --- 1. Lấy danh sách Node con mà User có quyền xem ---
+    if (user.role === UserRole.ROOT_ADMIN) {
+      nodes = await this.nodesRepository.find({ where: { parentId: parentObjectId } });
+    } else {
+      // Lấy tất cả các quyền của user
+      const userPermissions = await this.permissionsService.findAllForUser(user._id);
+      const accessibleNodeIds = userPermissions.map(p => p.nodeId);
+
+      // Tìm các node con của parentId VÀ user có quyền truy cập
+      nodes = await this.nodesRepository.find({
+        where: {
+          parentId: parentObjectId,
+          _id: { $in: accessibleNodeIds } as any,
+        },
+      });
+    }
+    if (nodes.length === 0) return [];
+
+    // --- 2. Kiểm tra `hasChildren` và lấy quyền chi tiết hàng loạt ---
+    const nodeIds = nodes.map(n => n._id);
+
+    // Query để tìm những node nào trong danh sách trên có con
+    const nodesWithChildren = await this.nodesRepository.distinct('parentId', { parentId: { $in: nodeIds } });
+    console.log("nodesWithChildren: ",nodesWithChildren);
+    const parentIdsWithChildren = new Set(nodesWithChildren.map(id => id.toHexString()));
+
+    console.log("parentIdsWithChildren: ",parentIdsWithChildren);
+
+    // Lấy quyền chi tiết của user trên các node này
+    const permissions = await this.permissionsService.findUserPermissionsForNodes(user._id, nodeIds);
+    const permissionMap = new Map<string, PermissionLevel>();
+    permissions.forEach(p => permissionMap.set(p.nodeId.toHexString(), p.permission));
+
+    // --- 3. Chuyển đổi sang DTO để trả về ---
+    const treeDtos = nodes.map(node => {
+      const nodeIdString = node._id.toHexString();
+      return plainToInstance(TreeNodeDto, { // Dùng plainToInstance để áp dụng decorator của DTO
+        id: node._id,
+        name: node.name,
+        type: node.type,
+        level: node.level,
+        hasChildren: parentIdsWithChildren.has(nodeIdString),
+        userPermission: permissionMap.get(nodeIdString) || null,
+      });
+    });
+
+    return treeDtos;
   }
 }

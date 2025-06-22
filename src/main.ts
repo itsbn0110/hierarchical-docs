@@ -1,8 +1,8 @@
 import 'reflect-metadata'; 
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { ValidationPipe } from '@nestjs/common';
+import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 
@@ -26,6 +26,10 @@ async function bootstrap() {
       transform: true, 
     }),
   );
+
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector),{
+    excludeExtraneousValues: true
+  }));
 
   const config = new DocumentBuilder()
     .setTitle('Hierarchical Document Management API')
