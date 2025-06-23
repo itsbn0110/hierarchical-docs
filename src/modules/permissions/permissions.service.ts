@@ -1,6 +1,6 @@
 // src/permissions/permissions.service.ts
 
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MongoRepository } from 'typeorm';
 import { ObjectId } from 'mongodb';
@@ -82,6 +82,13 @@ export class PermissionsService {
     const { userId, nodeId, permission } = grantDto;
     const granterId = granter._id;
     const targetNodeId = new ObjectId(nodeId);
+    const targetUserId = new ObjectId(userId);
+
+    // ===== BƯỚC SỬA LỖI - THÊM VÀO ĐÂY =====
+    // Quy tắc: Ngăn chặn người dùng tự thay đổi quyền của chính mình.
+    if (targetUserId.equals(granterId)) {
+      throw new ForbiddenException('Bạn không thể tự thay đổi quyền của chính mình.');
+    }
 
     // --- 1. KIỂM TRA QUYỀN CỦA NGƯỜI ĐI CẤP QUYỀN ---
     // Chỉ Owner hoặc Root Admin mới có quyền cấp quyền cho người khác
@@ -95,18 +102,23 @@ export class PermissionsService {
     }
 
     // --- 2. KIỂM TRA XEM PERMISSION ĐÃ TỒN TẠI CHƯA ---
-    const targetUserId = new ObjectId(userId);
     const existingPermission = await this.permissionRepository.findOne({
       where: { userId: targetUserId, nodeId: targetNodeId },
     });
-
+    // ===== BƯỚC KIỂM TRA MỚI - QUAN TRỌNG =====
+    // Nếu người bị tác động đã là Owner, chỉ có RootAdmin mới được phép thay đổi
+    if (existingPermission && existingPermission.permission === PermissionLevel.OWNER) {
+      if (granter.role !== UserRole.ROOT_ADMIN) {
+        throw new ForbiddenException('Bạn không có quyền thay đổi quyền của một Owner khác.');
+      }
+    }
+   
+    // Nếu tất cả các check đều qua, tiến hành cập nhật hoặc tạo mới
     if (existingPermission) {
-      // Nếu đã tồn tại, chỉ cần cập nhật lại cấp độ quyền
       existingPermission.permission = permission;
-      existingPermission.grantedBy = granterId; // Cập nhật người cấp quyền mới nhất
+      existingPermission.grantedBy = granterId;
       return this.permissionRepository.save(existingPermission);
     } else {
-      // Nếu chưa tồn tại, tạo một bản ghi mới
       const newPermission = this.permissionRepository.create({
         userId: targetUserId,
         nodeId: targetNodeId,
@@ -117,6 +129,65 @@ export class PermissionsService {
     }
   }
 
+
+   /**
+   * Thu hồi một quyền đã được cấp
+   * @param permissionId ID của bản ghi quyền cần xóa
+   * @param revoker Người đang thực hiện hành động thu hồi
+   */
+  async revoke(permissionId: string, revoker: User): Promise<void> {
+    const permissionObjectId = new ObjectId(permissionId);
+
+    // --- 1. TÌM BẢN GHI PERMISSION CẦN XÓA ---
+    const permissionToRevoke = await this.permissionRepository.findOne({
+      where: { _id: permissionObjectId },
+    });
+    if (!permissionToRevoke) {
+      throw new NotFoundException('Quyền này không tồn tại.');
+    }
+
+    // --- 2. KIỂM TRA QUYỀN CỦA NGƯỜI ĐI THU HỒI ---
+    // Chỉ Owner của Node đó (hoặc RootAdmin) mới có quyền thu hồi quyền của người khác
+    const canRevoke = await this.checkUserPermissionForNode(
+      revoker,
+      permissionToRevoke.nodeId,
+      PermissionLevel.OWNER,
+    );
+    if (!canRevoke) {
+      throw new ForbiddenException('Chỉ chủ sở hữu mới có quyền thu hồi quyền trên mục này.');
+    }
+    
+    if (permissionToRevoke.permission === PermissionLevel.OWNER) {
+    // Nếu người thu hồi không phải RootAdmin, không cho phép
+    if (revoker.role !== UserRole.ROOT_ADMIN) {
+      // Cho phép Owner tự thu hồi quyền của chính mình (nhưng sẽ bị chặn bởi logic Owner cuối cùng ở dưới)
+      // Nhưng không cho phép thu hồi quyền của Owner khác.
+      if (!permissionToRevoke.userId.equals(revoker._id)) {
+        throw new ForbiddenException('Bạn không có quyền thu hồi quyền của một Owner khác.');
+      }
+    }
+  }
+    // --- 3. (QUAN TRỌNG) KIỂM TRA ĐỂ TRÁNH 'MỒ CÔI' NODE ---
+    // Nếu quyền sắp bị thu hồi là quyền OWNER
+    if (permissionToRevoke.permission === PermissionLevel.OWNER) {
+      // Đếm xem node này còn lại bao nhiêu Owner khác
+      const otherOwnersCount = await this.permissionRepository.count({
+        where: {
+          nodeId: permissionToRevoke.nodeId,
+          permission: PermissionLevel.OWNER,
+          _id: { $ne: permissionObjectId } as any, // Đếm những owner khác, không tính cái sắp xóa
+        },
+      });
+
+      // Nếu không còn owner nào khác, không cho phép xóa owner cuối cùng
+      if (otherOwnersCount === 0) {
+        throw new ForbiddenException('Không thể xóa chủ sở hữu cuối cùng của mục này. Hãy chuyển quyền sở hữu cho người khác trước.');
+      }
+    }
+
+    // --- 4. THỰC HIỆN XÓA ---
+    await this.permissionRepository.delete(permissionObjectId);
+  }
   /**
    * TÌM TẤT CẢ ID CỦA OWNER TRÊN MỘT NODE
    */

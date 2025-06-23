@@ -1,8 +1,8 @@
 // src/nodes/nodes.service.ts
 
 import { Injectable, NotFoundException, ForbiddenException, Inject, forwardRef, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { MongoRepository } from 'typeorm';
+import { InjectConnection, InjectRepository } from '@nestjs/typeorm';
+import { Connection, MongoRepository } from 'typeorm';
 import { ObjectId } from 'mongodb';
 
 import { Node } from './entities/node.entity';
@@ -13,6 +13,10 @@ import { PermissionLevel } from 'src/common/enums/projects.enum';
 import { PermissionsService } from '../permissions/permissions.service';
 import { TreeNodeDto } from './dto/tree-node.dto';
 import { plainToInstance } from 'class-transformer';
+import { UpdateNodeNameDto } from './dto/update-node-name.dto';
+import { UpdateNodeContentDto } from './dto/update-node-content.dto';
+import { Permission } from '../permissions/entities/permission.entity';
+import { AccessRequest } from '../access-requests/entities/access-request.entity';
 
 type Ancestor = {
   _id: ObjectId;
@@ -27,6 +31,8 @@ export class NodesService {
 
     @Inject(forwardRef(() => PermissionsService))
     private readonly permissionsService: PermissionsService,
+
+    @InjectConnection() private readonly connection: Connection
   ) {}
 
   /**
@@ -101,6 +107,22 @@ export class NodesService {
     const parentObjectId = parentId ? new ObjectId(parentId) : null;
     let nodes: Node[];
 
+    // --- BƯỚC 1: KIỂM TRA QUYỀN TRUY CẬP VÀO THƯ MỤC CHA ---
+    // (Bỏ qua nếu là Root Admin hoặc đang xem ở cấp gốc)
+    if (user.role !== UserRole.ROOT_ADMIN && parentObjectId) {
+      const canViewParent = await this.permissionsService.checkUserPermissionForNode(
+        user,
+        parentObjectId,
+        PermissionLevel.VIEWER, // Chỉ cần ít nhất quyền xem
+      );
+      
+      // Nếu không có quyền xem thư mục cha, ném lỗi Forbidden ngay lập tức.
+      if (!canViewParent) {
+        throw new ForbiddenException('Bạn không có quyền truy cập vào thư mục này.');
+      }
+    }
+
+
     // --- 1. Lấy danh sách Node con mà User có quyền xem ---
     if (user.role === UserRole.ROOT_ADMIN) {
       nodes = await this.nodesRepository.find({ where: { parentId: parentObjectId } });
@@ -149,4 +171,110 @@ export class NodesService {
 
     return treeDtos;
   }
+
+  async updateName(nodeId: string, dto: UpdateNodeNameDto, user: User): Promise<Node> {
+    const nodeObjectId = new ObjectId(nodeId);
+    const { name: newName } = dto;
+
+    // 1. Tìm node và kiểm tra quyền Editor
+    const nodeToUpdate = await this.nodesRepository.findOne({ where: { _id: nodeObjectId } });
+    if (!nodeToUpdate) {
+      throw new NotFoundException('Node không tồn tại.');
+    }
+    const canEdit = await this.permissionsService.checkUserPermissionForNode(
+      user, nodeObjectId, PermissionLevel.EDITOR,
+    );
+    if (!canEdit) {
+      throw new ForbiddenException('Bạn không có quyền sửa mục này.');
+    }
+
+    // 2. Cập nhật tên của chính node đó
+    nodeToUpdate.name = newName;
+    await this.nodesRepository.save(nodeToUpdate);
+
+    // 3. Cập nhật tên trong mảng ancestors của tất cả con cháu
+    if (nodeToUpdate.type === NodeType.FOLDER) {
+      await this.nodesRepository.updateMany(
+        { 'ancestors._id': nodeObjectId },
+        { $set: { 'ancestors.$.name': newName } }
+      );
+    }
+    
+    return nodeToUpdate;
+  }
+
+  async updateContent(nodeId: string, dto: UpdateNodeContentDto, user: User): Promise<Node> {
+  const nodeObjectId = new ObjectId(nodeId);
+
+  // 1. Tìm node
+  const nodeToUpdate = await this.nodesRepository.findOne({ where: { _id: nodeObjectId } });
+    if (!nodeToUpdate) {
+      throw new NotFoundException('File không tồn tại.');
+    }
+
+    // 2. KIỂM TRA ĐIỀU KIỆN: Chỉ cho phép update content của FILE
+    if (nodeToUpdate.type !== NodeType.FILE) {
+      throw new BadRequestException('Chỉ có thể cập nhật nội dung cho file.');
+    }
+
+    // 3. Kiểm tra quyền Editor
+    const canEdit = await this.permissionsService.checkUserPermissionForNode(
+      user, nodeObjectId, PermissionLevel.EDITOR,
+    );
+    if (!canEdit) {
+      throw new ForbiddenException('Bạn không có quyền sửa nội dung file này.');
+    }
+
+    // 4. Cập nhật và lưu
+    nodeToUpdate.content = dto.content;
+    return this.nodesRepository.save(nodeToUpdate);
+  }
+
+  async delete(nodeId: string, user: User): Promise<{ deletedCount: number }> {
+    const nodeObjectId = new ObjectId(nodeId);
+
+    // --- BƯỚC 1: TÌM NODE VÀ KIỂM TRA QUYỀN OWNER (Thực hiện trước transaction) ---
+    const nodeToDelete = await this.nodesRepository.findOne({ where: { _id: nodeObjectId } });
+    if (!nodeToDelete) {
+      throw new NotFoundException('Mục cần xóa không tồn tại.');
+    }
+
+    const isOwner = await this.permissionsService.checkUserPermissionForNode(
+      user,
+      nodeToDelete._id,
+      PermissionLevel.OWNER,
+    );
+    if (!isOwner) { // checkUserPermissionForNode đã xử lý cho RootAdmin
+      throw new ForbiddenException('Chỉ chủ sở hữu mới có quyền xóa mục này.');
+    }
+
+    // --- BƯỚC 2: TÌM TẤT CẢ CÁC NODE CON CHÁU CẦN XÓA THEO ---
+    // Dùng pattern "Array of Ancestors" để tìm tất cả các descendant một cách hiệu quả
+    const descendants = await this.nodesRepository.find({
+      where: { 'ancestors._id': nodeObjectId }
+    });
+    
+    // Tạo một mảng chứa ID của node chính và tất cả con cháu của nó
+    const idsToDelete = [nodeToDelete._id, ...descendants.map(d => d._id)];
+
+    // --- BƯỚC 3: THỰC HIỆN XÓA HÀNG LOẠT TRONG MỘT TRANSACTION ĐỂ ĐẢM BẢO AN TOÀN ---
+    await this.connection.transaction(async transactionalEntityManager => {
+      const nodeRepo = transactionalEntityManager.getMongoRepository(Node);
+      const permissionRepo = transactionalEntityManager.getMongoRepository(Permission);
+      const accessRequestRepo = transactionalEntityManager.getMongoRepository(AccessRequest);
+
+      // 3.1. Xóa các permissions liên quan
+      await permissionRepo.deleteMany({ nodeId: { $in: idsToDelete } as any });
+      
+      // 3.2. Xóa các access requests liên quan
+      await accessRequestRepo.deleteMany({ nodeId: { $in: idsToDelete } as any });
+
+      // 3.3. Cuối cùng, xóa chính các node đó
+      await nodeRepo.deleteMany({ _id: { $in: idsToDelete } as any });
+    });
+
+    // Trả về số lượng mục đã bị xóa để front-end có thể hiển thị thông báo
+    return { deletedCount: idsToDelete.length };
+  }
+
 }
