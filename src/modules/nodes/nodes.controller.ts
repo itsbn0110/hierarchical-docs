@@ -1,10 +1,12 @@
-import { Controller, Post, Body, Req, UseGuards, UseInterceptors, ClassSerializerInterceptor, Get, Query } from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards, UseInterceptors, ClassSerializerInterceptor, Get, Query, Patch, Param, Delete } from '@nestjs/common';
 import { NodesService } from './nodes.service';
 import { CreateNodeDto } from './dto/create-node.dto';
 import { Node } from './entities/node.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { TreeNodeDto } from './dto/tree-node.dto';
+import { UpdateNodeNameDto } from './dto/update-node-name.dto';
+import { UpdateNodeContentDto } from './dto/update-node-content.dto';
 
 
 @UseInterceptors(ClassSerializerInterceptor)
@@ -28,6 +30,35 @@ export class NodesController {
     @Req() req,
   ): Promise<TreeNodeDto[]> {
     return this.nodesService.getTreeForUser(parentId, req.user);
+  }
+
+  @Patch(':id/name')
+  updateName(
+    @Param('id') id: string,
+    @Body() updateNodeNameDto: UpdateNodeNameDto,
+    @Req() req,
+  ) {
+    return this.nodesService.updateName(id, updateNodeNameDto, req.user);
+  }
+
+  @Patch(':id/content')
+  updateContent(
+    @Param('id') id: string,
+    @Body() updateNodeContentDto: UpdateNodeContentDto,
+    @Req() req,
+  ) {
+    return this.nodesService.updateContent(id, updateNodeContentDto, req.user);
+  }
+
+
+  @Delete(':id')
+  async delete(@Param('id') id: string, @Req() req) {
+    const deletedNode = await this.nodesService.delete(id, req.user)
+    return {
+      statusCode: 200,
+      message: 'Xóa thành công.',
+      deletedCount: deletedNode.deletedCount
+    };
   }
 }
   

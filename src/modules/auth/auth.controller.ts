@@ -28,8 +28,13 @@ export class AuthController {
   @UseGuards(AuthGuard('local'))
   @Post('login')
   async login(@Request() req: any, @Body() login: LoginDto) {
-    return this.authService.login((req as any).user);
-  }
+    const tokenInfo = await this.authService.login(req.user);
+    const response : LoginResponseDto = {
+      access_token: tokenInfo.access_token,
+      user: req.user
+    };
+    return response;
+  } 
 
   @ApiBearerAuth() 
   @UseGuards(JwtAuthGuard, RolesGuard)
