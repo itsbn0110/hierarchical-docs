@@ -1,22 +1,23 @@
-// src/permissions/permissions.service.ts
-
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MongoRepository } from 'typeorm';
 import { ObjectId } from 'mongodb';
-
 import { Permission } from './entities/permission.entity';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from 'src/common/enums/projects.enum';
 import { PermissionLevel } from 'src/common/enums/projects.enum';
 import { GrantPermissionDto } from './dto/grant-permissions.dto';
+import { NodesService } from '../nodes/nodes.service';
 @Injectable()
 export class PermissionsService {
   constructor(
     @InjectRepository(Permission)
     private readonly permissionRepository: MongoRepository<Permission>,
-  ) {}
 
+    @Inject(forwardRef(() => NodesService))
+    private readonly nodesService: NodesService,
+
+  ) {}
   /**
    * KIỂM TRA QUYỀN CỦA USER TRÊN MỘT NODE
    * Đây là hàm bạn đang bị thiếu.
@@ -74,6 +75,12 @@ export class PermissionsService {
     });
   }
 
+  // Thêm vào PermissionsService
+  async findAllOwnedByUser(userId: ObjectId): Promise<Permission[]> {
+    return this.permissionRepository.find({
+      where: { userId, permission: PermissionLevel.OWNER },
+    });
+  }
 
   /**
    * Cấp một quyền cụ thể
@@ -234,6 +241,37 @@ export class PermissionsService {
       await this.permissionRepository.deleteMany({
         nodeId: { $in: nodeIds } as any,
       });
+    }
+  }
+
+  async grantRecursive(
+    parentNodeId: ObjectId,
+    targetUserId: ObjectId,
+    permission: PermissionLevel,
+    granterId: ObjectId,
+  ): Promise<void> {
+    // 1. Tìm tất cả các node con cháu
+    const descendantNodes = await this.nodesService.findAllDescendants(parentNodeId);
+    const allNodeIds = [parentNodeId, ...descendantNodes.map(n => n._id)];
+
+    // 2. Dùng bulkWrite để cấp quyền hàng loạt một cách hiệu quả
+    // upsert: true sẽ tạo mới nếu chưa có, hoặc cập nhật quyền nếu đã có
+    const operations = allNodeIds.map(nodeId => ({
+      updateOne: {
+        filter: { userId: targetUserId, nodeId: nodeId },
+        update: {
+          $set: {
+            permission: permission,
+            grantedBy: granterId,
+            grantedAt: new Date(),
+          },
+        },
+        upsert: true,
+      },
+    }));
+
+    if (operations.length > 0) {
+      await this.permissionRepository.bulkWrite(operations);
     }
   }
 }

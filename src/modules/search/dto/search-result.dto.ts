@@ -1,5 +1,5 @@
 // src/search/dto/search-result.dto.ts
-import { Expose, Transform } from 'class-transformer';
+import { Exclude, Expose, Transform } from 'class-transformer';
 import { ObjectId } from 'mongodb';
 import { NodeType, PermissionLevel } from 'src/common/enums/projects.enum';
 
@@ -9,15 +9,23 @@ const transformObjectId = ({ value }) => (value instanceof ObjectId ? value.toHe
 // Định nghĩa các trạng thái truy cập có thể có
 export type AccessStatus = PermissionLevel | 'NO_ACCESS';
 
-@Expose()
+@Exclude()
 export class SearchResultDto {
   @Transform(transformObjectId)
+  @Expose()
   nodeId: ObjectId;
 
+  @Expose()
   name: string;
   
+  @Expose()
   type: NodeType;
 
   // Trạng thái truy cập của người dùng hiện tại trên node này
+  @Expose()
   accessStatus: AccessStatus; 
+
+  
+  @Expose()
+  score?: number;
 }

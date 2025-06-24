@@ -2,17 +2,33 @@ import { Controller, Get, Query, Request, UseGuards, UseInterceptors, ClassSeria
 import { SearchService } from './search.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SearchResultDto } from './dto/search-result.dto';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Search')
+@ApiBearerAuth() 
 @Controller('search')
 @UseGuards(JwtAuthGuard)
 export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
   @Get()
-  search(
+  @UseInterceptors(ClassSerializerInterceptor)
+  fullSearch(
     @Query('q') query: string,
     @Request() req,
   ): Promise<SearchResultDto[]> {
-    return this.searchService.search(query, req.user);
+    return this.searchService.fullSearch(query, req.user);
+  }
+
+  /**
+   * Endpoint cho gợi ý (Live search)
+   */
+  @Get('suggest')
+  @UseInterceptors(ClassSerializerInterceptor)
+  getSuggestions(
+    @Query('q') query: string,
+    @Request() req,
+  ): Promise<SearchResultDto[]> {
+    return this.searchService.getSuggestions(query, req.user);
   }
 }

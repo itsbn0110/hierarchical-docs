@@ -277,4 +277,15 @@ export class NodesService {
     return { deletedCount: idsToDelete.length };
   }
 
+  async findById(nodeId: ObjectId): Promise<Node | null> {
+    return this.nodesRepository.findOne({ where: { _id: nodeId } });
+  }
+
+  async findAllDescendants(parentNodeId: ObjectId): Promise<Node[]> {
+    // Dùng pattern Array of Ancestors để tìm hiệu quả
+    return this.nodesRepository.find({
+      where: { 'ancestors._id': parentNodeId },
+    });
+  }
+
 }

@@ -18,6 +18,7 @@ import { PermissionsModule } from './modules/permissions/permissions.module';
 import { AccessRequestsModule } from './modules/access-requests/access-requests.module';
 import { bullConfig } from './config/queue.config';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
+import { SearchModule } from './modules/search/search.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
     NodesModule,
     PermissionsModule,
     AccessRequestsModule,
+    SearchModule
   ],
   providers: [
     {
