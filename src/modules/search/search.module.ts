@@ -6,10 +6,7 @@ import { Node } from '../nodes/entities/node.entity';
 import { PermissionsModule } from '../permissions/permissions.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Node]), 
-    PermissionsModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Node]), PermissionsModule],
   controllers: [SearchController],
   providers: [SearchService],
 })

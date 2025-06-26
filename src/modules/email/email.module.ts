@@ -8,10 +8,10 @@ import { ConfigModule } from '@nestjs/config';
   imports: [
     ConfigModule,
     BullModule.registerQueue({
-      name: 'email', 
+      name: 'email',
     }),
   ],
   providers: [EmailProducerService, EmailConsumerService],
-  exports: [EmailProducerService], 
+  exports: [EmailProducerService],
 })
 export class EmailModule {}

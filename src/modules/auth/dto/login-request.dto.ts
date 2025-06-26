@@ -8,7 +8,7 @@ export class LoginDto {
   })
   @IsString()
   @IsNotEmpty()
-  email: string;
+    email: string;
 
   @ApiProperty({
     description: 'Mật khẩu của người dùng',
@@ -16,5 +16,5 @@ export class LoginDto {
   })
   @IsString()
   @IsNotEmpty()
-  password: string;
+    password: string;
 }

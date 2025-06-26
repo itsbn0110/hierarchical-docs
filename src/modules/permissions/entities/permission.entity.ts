@@ -10,31 +10,31 @@ export class Permission {
   @ObjectIdColumn()
   @Transform(transformObjectId)
   @Expose()
-  _id: ObjectId;
+    _id: ObjectId;
 
   @Column()
   @Expose()
   @Transform(transformObjectId)
-  userId: ObjectId;
+    userId: ObjectId;
 
   @Column()
   @Expose()
   @Transform(transformObjectId)
-  nodeId: ObjectId;
+    nodeId: ObjectId;
 
   @Column({
     type: 'enum',
-    enum: PermissionLevel, 
+    enum: PermissionLevel,
   })
   @Expose()
-  permission: PermissionLevel;
+    permission: PermissionLevel;
 
   @Expose()
   @Column()
   @Transform(transformObjectId)
-  grantedBy: ObjectId;
+    grantedBy: ObjectId;
 
   @CreateDateColumn({ type: 'timestamp' })
   @Expose()
-  grantedAt: Date;
+    grantedAt: Date;
 }

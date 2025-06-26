@@ -1,4 +1,4 @@
-import { BullModuleOptions, BullRootModuleOptions } from '@nestjs/bull';
+import { BullRootModuleOptions } from '@nestjs/bull';
 import { ConfigService } from '@nestjs/config';
 
 export const bullConfig = (configService: ConfigService): BullRootModuleOptions => ({

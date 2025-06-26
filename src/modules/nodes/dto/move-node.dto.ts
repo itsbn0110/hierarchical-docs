@@ -3,7 +3,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class MoveNodeDto {
   /**
-   * ID của thư mục cha mới. 
+   * ID của thư mục cha mới.
    * Gửi `null` nếu muốn di chuyển node ra thư mục gốc.
    */
   @ApiPropertyOptional({
@@ -14,5 +14,5 @@ export class MoveNodeDto {
   })
   @IsOptional()
   @IsMongoId({ message: 'newParentId phải là một ID hợp lệ.' })
-  newParentId: string | null;
+    newParentId: string | null;
 }

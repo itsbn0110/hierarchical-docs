@@ -12,32 +12,32 @@ export class AccessRequest {
   @ObjectIdColumn()
   @Expose()
   @Transform(transformObjectId)
-  _id: ObjectId;
+    _id: ObjectId;
 
   @Expose()
   @Column()
   @Transform(transformObjectId)
-  requesterId: ObjectId;
+    requesterId: ObjectId;
 
   @Expose()
   @Column()
   @Transform(transformObjectId)
-  nodeId: ObjectId;
+    nodeId: ObjectId;
 
   @Expose()
   @Column({
     type: 'enum',
     enum: [PermissionLevel.VIEWER, PermissionLevel.EDITOR],
   })
-  requestedPermission: PermissionLevel;
+    requestedPermission: PermissionLevel;
 
   @Expose()
   @Column({ default: false })
-  isRecursive: boolean;
+    isRecursive: boolean;
 
   @Expose()
   @Column({ nullable: true })
-  message?: string;
+    message?: string;
 
   @Expose()
   @Column({
@@ -45,18 +45,18 @@ export class AccessRequest {
     enum: RequestStatus,
     default: RequestStatus.PENDING,
   })
-  status: RequestStatus;
+    status: RequestStatus;
 
   @Expose()
   @Column({ nullable: true })
   @Transform(transformObjectId)
-  reviewerId?: ObjectId;
+    reviewerId?: ObjectId;
 
   @Expose()
   @Column({ type: 'timestamp', nullable: true })
-  reviewedAt?: Date;
+    reviewedAt?: Date;
 
   @Expose()
   @CreateDateColumn({ type: 'timestamp' })
-  createdAt: Date;
+    createdAt: Date;
 }

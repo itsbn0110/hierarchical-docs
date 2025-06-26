@@ -28,41 +28,48 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       status = exception.getStatus();
       message = res.message;
       errorCode = res.errorCode;
-      error = exception.constructor.name; 
-    } 
-    else if (exception instanceof HttpException) {
+      error = exception.constructor.name;
+    } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const res = exception.getResponse();
-      error = exception.name; 
+      error = exception.name;
+
+      function hasMessage(obj: unknown): obj is { message: string | string[] } {
+        return typeof obj === 'object' && obj !== null && 'message' in obj;
+      }
 
       if (typeof res === 'object' && res !== null) {
-        message = (res as any).message || 'An error occurred';
-        // Xử lý cho lỗi validation của class-validator
-        if (Array.isArray(message)) {
-          message = message.join('. ');
+        if (hasMessage(res)) {
+          if (Array.isArray(res.message)) {
+            message = res.message.join('. ');
+          } else {
+            message = res.message || 'An error occurred';
+          }
+        } else {
+          message = 'An error occurred';
         }
       } else {
-        message = typeof res === 'string' ? res : JSON.stringify(res); 
+        message = typeof res === 'string' ? res : JSON.stringify(res);
       }
-    } 
+    // eslint-disable-next-line brace-style
+    }
     // 3. Bắt tất cả các lỗi còn lại (lỗi 500 không lường trước)
     else {
       status = HttpStatus.INTERNAL_SERVER_ERROR;
       error = 'InternalServerError';
       message = 'An unexpected internal server error has occurred.';
     }
-   
+
     this.logger.error(
-      `[${request.method}] ${request.url} - Status: ${status} - Error: ${error} - Message: ${message}`,
+        `[${request.method}] ${request.url} - Status: ${status} - Error: ${error} - Message: ${message}`,
       exception instanceof Error ? exception.stack : JSON.stringify(exception),
     );
 
-  
     const responseBody = {
       statusCode: status,
       message,
       error,
-      errorCode, 
+      errorCode,
       path: request.url,
       timestamp: new Date().toISOString(),
     };

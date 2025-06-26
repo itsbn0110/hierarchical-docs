@@ -15,10 +15,10 @@ export class TasksConsumerService {
     try {
       // Gọi lại đúng hàm grantRecursive mà chúng ta đã viết
       await this.permissionsService.grantRecursive(
-        parentNodeId,
-        targetUserId,
-        permission,
-        granterId,
+          parentNodeId,
+          targetUserId,
+          permission,
+          granterId,
       );
       console.log(`[Tasks Worker] ĐÃ XỬ LÝ XONG job cấp quyền đệ quy:`, job.id);
     } catch (error) {

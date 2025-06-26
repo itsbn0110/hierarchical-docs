@@ -8,7 +8,10 @@ import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
 import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(configService: ConfigService , private readonly usersService: UsersService) {
+  constructor(
+      configService: ConfigService,
+    private readonly usersService: UsersService,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -16,18 +19,26 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
- async validate(payload: any) { 
+  async validate(payload: { sub: string }) {
     const userId = payload.sub;
-    
+
     const user = await this.usersService.findUserById(userId);
     if (!user || !user.isActive) {
-     throw new BusinessException(ErrorCode.USER_NOT_FOUND, ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND );
+      throw new BusinessException(
+          ErrorCode.USER_NOT_FOUND,
+          ErrorMessages.USER_NOT_FOUND,
+          HttpStatus.NOT_FOUND,
+      );
     }
 
     if (user && !user.isActive) {
-     throw new BusinessException(ErrorCode.USER_NOT_FOUND, ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND );
+      throw new BusinessException(
+          ErrorCode.USER_NOT_FOUND,
+          ErrorMessages.USER_NOT_FOUND,
+          HttpStatus.NOT_FOUND,
+      );
     }
-    
-    return user; 
+
+    return user;
   }
 }

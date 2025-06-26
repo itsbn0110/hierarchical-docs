@@ -1,3 +1,4 @@
+
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccessRequestsService } from '../access-requests/access-requests.service';
@@ -16,8 +17,7 @@ import { TasksModule } from '../tasks/tasks.module';
     forwardRef(() => PermissionsModule),
     forwardRef(() => EmailModule),
     forwardRef(() => UsersModule),
-    forwardRef(() => TasksModule)
-
+    forwardRef(() => TasksModule),
   ],
   controllers: [AccessRequestsController],
   providers: [AccessRequestsService],

@@ -13,19 +13,18 @@ export type AccessStatus = PermissionLevel | 'NO_ACCESS';
 export class SearchResultDto {
   @Transform(transformObjectId)
   @Expose()
-  nodeId: ObjectId;
+    nodeId: ObjectId;
 
   @Expose()
-  name: string;
-  
+    name: string;
+
   @Expose()
-  type: NodeType;
+    type: NodeType;
 
   // Trạng thái truy cập của người dùng hiện tại trên node này
   @Expose()
-  accessStatus: AccessStatus; 
+    accessStatus: AccessStatus;
 
-  
   @Expose()
-  score?: number;
+    score?: number;
 }

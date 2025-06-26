@@ -2,9 +2,14 @@ import { Processor, Process, OnQueueActive, OnQueueError, OnQueueCompleted } fro
 import { Job } from 'bullmq';
 import * as nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
-import { NewAccessRequestJobData, PermissionGrantedJobData, RequestProcessedJobData, WelcomeEmailJobData } from './email-producer.service';
+import {
+  NewAccessRequestJobData,
+  PermissionGrantedJobData,
+  RequestProcessedJobData,
+  WelcomeEmailJobData,
+} from './email-producer.service';
 
-@Processor('email') 
+@Processor('email')
 export class EmailConsumerService {
   private transporter: nodemailer.Transporter;
 
@@ -12,12 +17,12 @@ export class EmailConsumerService {
     this.transporter = nodemailer.createTransport({
       host: this.configService.get<string>('EMAIL_HOST'),
       port: this.configService.get<number>('EMAIL_PORT'),
-      secure: this.configService.get<string>('EMAIL_SECURE') === 'true', 
+      secure: this.configService.get<string>('EMAIL_SECURE') === 'true',
       auth: {
         user: this.configService.get<string>('EMAIL_USER'),
         pass: this.configService.get<string>('EMAIL_PASSWORD'),
       },
-    });   
+    });
   }
 
   @OnQueueActive()
@@ -31,7 +36,7 @@ export class EmailConsumerService {
   }
 
   @OnQueueCompleted()
-  onCompleted(job: Job, result: any) {
+  onCompleted(job: Job, result: unknown) {
     console.log(`[Email Worker] Hoàn thành job ${job.id}. Kết quả:`, result);
   }
 
@@ -51,9 +56,7 @@ export class EmailConsumerService {
                <p>Người dùng <b>${requesterName}</b> vừa gửi một yêu cầu xin quyền truy cập vào mục <b>${nodeName}</b> của bạn.</p>
                <p>Vui lòng đăng nhập vào hệ thống để xem xét và xử lý.</p>
                <br/>
-               <a href="${loginUrl}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-                 Đến trang đăng nhập
-               </a>
+               <a href="${loginUrl}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Đến trang đăng nhập</a>
                <br/>
                <p>Trân trọng,<br/>Hệ thống Quản lý Tài liệu</p>`,
       });
@@ -75,11 +78,15 @@ export class EmailConsumerService {
     const htmlContent = `
       <p>Xin chào,</p>
       <p>Yêu cầu truy cập của bạn cho mục <b>${nodeName}</b> đã được <b>${isApproved ? 'PHÊ DUYỆT' : 'TỪ CHỐI'}</b>.</p>
-      ${isApproved ? `<p>Bây giờ bạn có thể truy cập vào tài nguyên này.</p>
+      ${
+        isApproved ?
+          `<p>Bây giờ bạn có thể truy cập vào tài nguyên này.</p>
       <br/>
       <a href="${loginUrl}" style="background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
         Truy cập ngay
-      </a>` : ''}
+      </a>` :
+          ''
+}
       <br/>
       <p>Trân trọng,<br/>Hệ thống Quản lý Tài liệu</p>
     `;
@@ -113,9 +120,7 @@ export class EmailConsumerService {
       <p>Bạn vừa được người dùng <b>${granterName}</b> cấp quyền <b>${permissionLevel}</b> cho mục <b>${nodeName}</b>.</p>
       <p>Bạn có thể truy cập vào hệ thống để xem ngay bây giờ.</p>
       <br/>
-      <a href="${loginUrl}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-        Đến trang đăng nhập
-      </a>
+      <a href="${loginUrl}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Đến trang đăng nhập</a>
       <br/>
       <p>Trân trọng,<br/>Hệ thống Quản lý Tài liệu</p>
     `;
@@ -137,9 +142,9 @@ export class EmailConsumerService {
 
   @Process('welcome-email')
   async handleWelcomeEmail(job: Job<WelcomeEmailJobData>) {
-      const { to, username, temporaryPassword, loginUrl } = job.data;
-      const subject = 'Chào mừng bạn đến với Hệ thống Quản lý Tài liệu';
-      const htmlContent = `
+    const { to, username, temporaryPassword, loginUrl } = job.data;
+    const subject = 'Chào mừng bạn đến với Hệ thống Quản lý Tài liệu';
+    const htmlContent = `
           <p>Xin chào ${username},</p>
           <p>Một tài khoản đã được tạo cho bạn trên hệ thống của chúng tôi.</p>
           <p>Vui lòng sử dụng thông tin dưới đây để đăng nhập lần đầu:</p>
@@ -148,20 +153,20 @@ export class EmailConsumerService {
               <li>Mật khẩu tạm thời: <b>${temporaryPassword}</b></li>
           </ul>
           <p>Bạn sẽ được yêu cầu đổi mật khẩu ngay sau khi đăng nhập.</p>
-          <a href="${loginUrl}" style="...">Đăng nhập ngay</a>
+          <a href="${loginUrl}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Đăng nhập ngay</a>
       `;
-      try {
-        const info = await this.transporter.sendMail({
-          from: this.configService.get<string>('EMAIL_FROM'),
-          to: to,
-          subject: subject,
-          html: htmlContent,
-        });
-        console.log(`[Email Worker] ĐÃ GỬI XONG email chào mừng user mới cho: ${to}`);
-        return { messageId: info.messageId };
-      } catch (error) {
-        console.error(`[Email Worker] Gửi email thất bại cho ${to}:`, error);
-        throw error;
-      }
+    try {
+      const info = await this.transporter.sendMail({
+        from: this.configService.get<string>('EMAIL_FROM'),
+        to: to,
+        subject: subject,
+        html: htmlContent,
+      });
+      console.log(`[Email Worker] ĐÃ GỬI XONG email chào mừng user mới cho: ${to}`);
+      return { messageId: info.messageId };
+    } catch (error) {
+      console.error(`[Email Worker] Gửi email thất bại cho ${to}:`, error);
+      throw error;
+    }
   }
 }

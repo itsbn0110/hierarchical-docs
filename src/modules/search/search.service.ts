@@ -49,26 +49,32 @@ export class SearchService {
 
     return this.enrichResultsWithPermissions(nodesFound, user);
   }
-  
+
   /**
    * Hàm helper private để "làm giàu" kết quả với thông tin quyền
    */
-  private async enrichResultsWithPermissions(nodes: Node[], user: User): Promise<SearchResultDto[]> {
+  private async enrichResultsWithPermissions(
+      nodes: Node[],
+      user: User,
+  ): Promise<SearchResultDto[]> {
     if (nodes.length === 0) return [];
 
-    const nodeIds = nodes.map(node => node._id);
-    const permissions = await this.permissionsService.findUserPermissionsForNodes(user._id, nodeIds);
+    const nodeIds = nodes.map((node) => node._id);
+    const permissions = await this.permissionsService.findUserPermissionsForNodes(
+        user._id,
+        nodeIds,
+    );
     const permissionMap = new Map<string, PermissionLevel>();
-    permissions.forEach(p => permissionMap.set(p.nodeId.toHexString(), p.permission));
+    permissions.forEach((p) => permissionMap.set(p.nodeId.toHexString(), p.permission));
 
-    const searchResults = nodes.map(node => {
+    const searchResults = nodes.map((node) => {
       const accessStatus: AccessStatus = permissionMap.get(node._id.toHexString()) || 'NO_ACCESS';
       return plainToInstance(SearchResultDto, {
         nodeId: node._id,
         name: node.name,
         type: node.type,
         accessStatus: accessStatus,
-        score: (node as any).score // Lấy điểm số nếu có
+        score: (node as any).score,
       });
     });
 

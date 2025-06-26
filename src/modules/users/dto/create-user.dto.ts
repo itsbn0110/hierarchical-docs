@@ -14,7 +14,7 @@ export class CreateUserDto {
   })
   @IsString({ message: ErrorMessages.INVALID_USERNAME })
   @IsNotEmpty({ message: ErrorMessages.USERNAME_REQUIRED })
-  username: string;
+    username: string;
 
   /**
    * Địa chỉ email của người dùng.
@@ -26,7 +26,7 @@ export class CreateUserDto {
   })
   @IsEmail({}, { message: ErrorMessages.INVALID_EMAIL })
   @IsNotEmpty({ message: ErrorMessages.EMAIL_REQUIRED })
-  email: string;
+    email: string;
 
   /**
    * Vai trò của người dùng trong hệ thống.
@@ -38,7 +38,7 @@ export class CreateUserDto {
   })
   @IsEnum(UserRole, { message: ErrorMessages.INVALID_ROLE })
   @IsNotEmpty({ message: ErrorMessages.ROLE_REQUIRED })
-  role: UserRole;
+    role: UserRole;
 
   /**
    * Trạng thái hoạt động của tài khoản. Mặc định là true.
@@ -49,5 +49,5 @@ export class CreateUserDto {
   })
   @IsBoolean({ message: ErrorMessages.VALIDATION_ERROR })
   @IsOptional()
-  isActive?: boolean;
+    isActive?: boolean;
 }

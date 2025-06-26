@@ -1,16 +1,23 @@
-import { ForbiddenException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  forwardRef,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MongoRepository } from 'typeorm';
 import { ObjectId } from 'mongodb';
 import { Permission } from './entities/permission.entity';
 import { User } from '../users/entities/user.entity';
-import { UserRole } from 'src/common/enums/projects.enum';
+import { ActivityAction, UserRole } from 'src/common/enums/projects.enum';
 import { PermissionLevel } from 'src/common/enums/projects.enum';
 import { GrantPermissionDto } from './dto/grant-permissions.dto';
 import { NodesService } from '../nodes/nodes.service';
 import { EmailProducerService } from '../email/email-producer.service';
 import { UsersService } from '../users/users.service';
 import { ConfigService } from '@nestjs/config';
+import { ActivityLogProducerService } from '../activity-log/activity-log-producer.service';
 @Injectable()
 export class PermissionsService {
   constructor(
@@ -23,6 +30,8 @@ export class PermissionsService {
     private readonly emailProducerService: EmailProducerService,
     @Inject(forwardRef(() => UsersService))
     private readonly usersService: UsersService,
+    @Inject(forwardRef(() => ActivityLogProducerService))
+    private readonly activityLogProducer: ActivityLogProducerService,
   ) {}
   /**
    * KIỂM TRA QUYỀN CỦA USER TRÊN MỘT NODE
@@ -33,9 +42,9 @@ export class PermissionsService {
    * @returns `true` nếu người dùng có quyền, `false` nếu không.
    */
   async checkUserPermissionForNode(
-    user: User,
-    nodeId: ObjectId,
-    requiredPermission: PermissionLevel,
+      user: User,
+      nodeId: ObjectId,
+      requiredPermission: PermissionLevel,
   ): Promise<boolean> {
     // Quy tắc 1: Root Admin luôn có mọi quyền
     if (user.role === UserRole.ROOT_ADMIN) {
@@ -66,7 +75,6 @@ export class PermissionsService {
     return userPermissionLevel >= requiredPermissionLevel;
   }
 
-
   async findAllForUser(userId: ObjectId): Promise<Permission[]> {
     return this.permissionRepository.find({ where: { userId } });
   }
@@ -76,8 +84,8 @@ export class PermissionsService {
     return this.permissionRepository.find({
       where: {
         userId,
-        nodeId: { $in: nodeIds } as any,
-      }
+        nodeId: { $in: nodeIds },
+      },
     });
   }
 
@@ -91,7 +99,7 @@ export class PermissionsService {
   /**
    * Cấp một quyền cụ thể
    */
-   async grant(grantDto: GrantPermissionDto, granter: User): Promise<Permission> {
+  async grant(grantDto: GrantPermissionDto, granter: User): Promise<Permission> {
     const { userId, nodeId, permission } = grantDto;
     const granterId = granter._id;
     const targetNodeId = new ObjectId(nodeId);
@@ -106,11 +114,12 @@ export class PermissionsService {
     // --- 1. KIỂM TRA QUYỀN CỦA NGƯỜI ĐI CẤP QUYỀN ---
     // Chỉ Owner hoặc Root Admin mới có quyền cấp quyền cho người khác
     const isOwner = await this.checkUserPermissionForNode(
-      granter,
-      targetNodeId,
-      PermissionLevel.OWNER,
+        granter,
+        targetNodeId,
+        PermissionLevel.OWNER,
     );
-    if (!isOwner) { // checkUserPermissionForNode đã xử lý cho Root Admin
+    if (!isOwner) {
+      // checkUserPermissionForNode đã xử lý cho Root Admin
       throw new ForbiddenException('Chỉ chủ sở hữu mới có quyền cấp quyền cho mục này.');
     }
 
@@ -125,7 +134,7 @@ export class PermissionsService {
         throw new ForbiddenException('Bạn không có quyền thay đổi quyền của một Owner khác.');
       }
     }
-   
+
     // Nếu tất cả các check đều qua, tiến hành cập nhật hoặc tạo mới
     if (existingPermission) {
       existingPermission.permission = permission;
@@ -138,9 +147,9 @@ export class PermissionsService {
         permission: permission,
         grantedBy: granterId,
       });
-      
+
       const savedPermission = await this.permissionRepository.save(newPermission);
-      
+
       // --- THÊM LOGIC GỬI EMAIL THÔNG BÁO ---
       try {
         const [targetUser, node] = await Promise.all([
@@ -157,15 +166,28 @@ export class PermissionsService {
             loginUrl: this.configService.get<string>('FRONTEND_URL'),
           });
         }
+
+        await this.activityLogProducer.logActivity({
+          userId: targetUserId,
+          action: ActivityAction.PERMISSION_GRANTED,
+          targetId: targetNodeId,
+          details: {
+            grantedBy: granter.username,
+            grantedFor: targetUser.username,
+            permissionLevel: savedPermission.permission,
+            type: node.type,
+            grantedAt: savedPermission.grantedAt,
+          },
+        });
       } catch (error) {
         console.error(`Không thể gửi email thông báo cấp quyền cho user ${userId}:`, error);
       }
+
       return savedPermission;
     }
   }
 
-
-   /**
+  /**
    * Thu hồi một quyền đã được cấp
    * @param permissionId ID của bản ghi quyền cần xóa
    * @param revoker Người đang thực hiện hành động thu hồi
@@ -184,24 +206,24 @@ export class PermissionsService {
     // --- 2. KIỂM TRA QUYỀN CỦA NGƯỜI ĐI THU HỒI ---
     // Chỉ Owner của Node đó (hoặc RootAdmin) mới có quyền thu hồi quyền của người khác
     const canRevoke = await this.checkUserPermissionForNode(
-      revoker,
-      permissionToRevoke.nodeId,
-      PermissionLevel.OWNER,
+        revoker,
+        permissionToRevoke.nodeId,
+        PermissionLevel.OWNER,
     );
     if (!canRevoke) {
       throw new ForbiddenException('Chỉ chủ sở hữu mới có quyền thu hồi quyền trên mục này.');
     }
-    
+
     if (permissionToRevoke.permission === PermissionLevel.OWNER) {
-    // Nếu người thu hồi không phải RootAdmin, không cho phép
-    if (revoker.role !== UserRole.ROOT_ADMIN) {
-      // Cho phép Owner tự thu hồi quyền của chính mình (nhưng sẽ bị chặn bởi logic Owner cuối cùng ở dưới)
-      // Nhưng không cho phép thu hồi quyền của Owner khác.
-      if (!permissionToRevoke.userId.equals(revoker._id)) {
-        throw new ForbiddenException('Bạn không có quyền thu hồi quyền của một Owner khác.');
+      // Nếu người thu hồi không phải RootAdmin, không cho phép
+      if (revoker.role !== UserRole.ROOT_ADMIN) {
+        // Cho phép Owner tự thu hồi quyền của chính mình (nhưng sẽ bị chặn bởi logic Owner cuối cùng ở dưới)
+        // Nhưng không cho phép thu hồi quyền của Owner khác.
+        if (!permissionToRevoke.userId.equals(revoker._id)) {
+          throw new ForbiddenException('Bạn không có quyền thu hồi quyền của một Owner khác.');
+        }
       }
     }
-  }
     // --- 3. (QUAN TRỌNG) KIỂM TRA ĐỂ TRÁNH 'MỒ CÔI' NODE ---
     // Nếu quyền sắp bị thu hồi là quyền OWNER
     if (permissionToRevoke.permission === PermissionLevel.OWNER) {
@@ -210,16 +232,32 @@ export class PermissionsService {
         where: {
           nodeId: permissionToRevoke.nodeId,
           permission: PermissionLevel.OWNER,
-          _id: { $ne: permissionObjectId } as any, // Đếm những owner khác, không tính cái sắp xóa
+          _id: { $ne: permissionObjectId }, // Đếm những owner khác, không tính cái sắp xóa
         },
       });
 
       // Nếu không còn owner nào khác, không cho phép xóa owner cuối cùng
       if (otherOwnersCount === 0) {
-        throw new ForbiddenException('Không thể xóa chủ sở hữu cuối cùng của mục này. Hãy chuyển quyền sở hữu cho người khác trước.');
+        throw new ForbiddenException(
+            'Không thể xóa chủ sở hữu cuối cùng của mục này. Hãy chuyển quyền sở hữu cho người khác trước.',
+        );
       }
     }
 
+    const node = await this.nodesService.findById(permissionToRevoke.nodeId);
+    const targetUser = await this.usersService.findById(permissionToRevoke.userId.toHexString());
+    await this.activityLogProducer.logActivity({
+      userId: revoker._id,
+      action: ActivityAction.PERMISSION_REVOKED,
+      targetId: permissionToRevoke.nodeId,
+      details: {
+        revokedBy: revoker.username,
+        revokedFor: targetUser.username,
+        permissionLevel: permissionToRevoke.permission,
+        type: node?.type,
+        revokedAt: new Date(),
+      },
+    });
     // --- 4. THỰC HIỆN XÓA ---
     await this.permissionRepository.delete(permissionObjectId);
   }
@@ -235,18 +273,18 @@ export class PermissionsService {
       select: ['userId'],
     });
 
-    return permissions.map(p => p.userId);
+    return permissions.map((p) => p.userId);
   }
 
   /**
    * CẤP QUYỀN OWNER HÀNG LOẠT CHO NHIỀU USER
    */
   async grantOwnerPermissionToUsers(
-    userIds: ObjectId[],
-    nodeId: ObjectId,
-    granterId: ObjectId,
+      userIds: ObjectId[],
+      nodeId: ObjectId,
+      granterId: ObjectId,
   ): Promise<void> {
-    const newPermissions = userIds.map(userId => ({
+    const newPermissions: Partial<Permission>[] = userIds.map((userId: ObjectId) => ({
       userId: userId,
       nodeId: nodeId,
       permission: PermissionLevel.OWNER,
@@ -267,24 +305,24 @@ export class PermissionsService {
   async deletePermissionsForNodes(nodeIds: ObjectId[]): Promise<void> {
     if (nodeIds.length > 0) {
       await this.permissionRepository.deleteMany({
-        nodeId: { $in: nodeIds } as any,
+        nodeId: { $in: nodeIds },
       });
     }
   }
 
   async grantRecursive(
-    parentNodeId: ObjectId,
-    targetUserId: ObjectId,
-    permission: PermissionLevel,
-    granterId: ObjectId,
+      parentNodeId: ObjectId,
+      targetUserId: ObjectId,
+      permission: PermissionLevel,
+      granterId: ObjectId,
   ): Promise<void> {
     // 1. Tìm tất cả các node con cháu
     const descendantNodes = await this.nodesService.findAllDescendants(parentNodeId);
-    const allNodeIds = [parentNodeId, ...descendantNodes.map(n => n._id)];
+    const allNodeIds = [parentNodeId, ...descendantNodes.map((n) => n._id)];
 
     // 2. Dùng bulkWrite để cấp quyền hàng loạt một cách hiệu quả
     // upsert: true sẽ tạo mới nếu chưa có, hoặc cập nhật quyền nếu đã có
-    const operations = allNodeIds.map(nodeId => ({
+    const operations = allNodeIds.map((nodeId) => ({
       updateOne: {
         filter: { userId: targetUserId, nodeId: nodeId },
         update: {

@@ -1,4 +1,12 @@
-import { BadRequestException, ConflictException, ForbiddenException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  forwardRef,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AccessRequest } from './entities/access-request.entity';
 import { User } from '../users/entities/user.entity';
 import { CreateAccessRequestDto } from './dto/create-access-request.dto';
@@ -14,7 +22,7 @@ import { ConfigService } from '@nestjs/config';
 import { TasksProducerService } from '../tasks/tasks-producer.service';
 @Injectable()
 export class AccessRequestsService {
-  constructor (
+  constructor(
     private readonly configService: ConfigService,
     @Inject(forwardRef(() => PermissionsService))
     private readonly permissionService: PermissionsService,
@@ -27,13 +35,13 @@ export class AccessRequestsService {
     @Inject(forwardRef(() => TasksProducerService))
     private readonly tasksProducerService: TasksProducerService,
     @InjectRepository(AccessRequest)
-    private readonly accessRequestRepository: MongoRepository <AccessRequest>,
+    private readonly accessRequestRepository: MongoRepository<AccessRequest>,
   ) {}
 
-  async createAccessRequest (dto: CreateAccessRequestDto, requester: User) : Promise <AccessRequest> {
-    const {nodeId,requestedPermission, message, isRecursive } = dto;
+  async createAccessRequest(dto: CreateAccessRequestDto, requester: User): Promise<AccessRequest> {
+    const { nodeId, requestedPermission, message, isRecursive } = dto;
     const targetNodeId = new ObjectId(nodeId);
-    
+
     // --- 1. KIỂM TRA CÁC ĐIỀU KIỆN HỢP LỆ ---
     // 1a. Kiểm tra xem Node có tồn tại không
     const node = await this.nodeService.findById(targetNodeId);
@@ -42,13 +50,13 @@ export class AccessRequestsService {
     }
     // 1b. Kiểm tra xem người dùng đã có quyền cao hơn hoặc bằng quyền đang xin chưa
     const hasSufficentPermission = await this.permissionService.checkUserPermissionForNode(
-      requester,
-      targetNodeId,
-      requestedPermission
+        requester,
+        targetNodeId,
+        requestedPermission,
     );
     if (hasSufficentPermission) {
       throw new ConflictException('Bạn đã có quyền truy cập vào mục này rồi.');
-    } 
+    }
     // 1c. Kiểm tra xem đã có một yêu cầu đang chờ xử lý (PENDING) từ user này cho node này chưa
     const existingPendingRequest = await this.accessRequestRepository.findOne({
       where: {
@@ -72,7 +80,7 @@ export class AccessRequestsService {
 
     const savedRequest = await this.accessRequestRepository.save(newRequest);
 
-   try {
+    try {
       const ownerIds = await this.permissionService.findOwnerIdsOfNode(new ObjectId(dto.nodeId));
       const owners = await this.usersService.findByIds(ownerIds);
 
@@ -95,14 +103,13 @@ export class AccessRequestsService {
     return savedRequest;
   }
 
-
   /**
    * Tìm tất cả các yêu cầu đang chờ xử lý mà một Owner có quyền xem xét.
    */
   async findPendingRequestsForOwner(owner: User): Promise<AccessRequest[]> {
     // 1. Tìm tất cả các quyền Owner của người dùng này
     const ownerPermissions = await this.permissionService.findAllOwnedByUser(owner._id);
-    const ownedNodeIds = ownerPermissions.map(p => p.nodeId);
+    const ownedNodeIds = ownerPermissions.map((p) => p.nodeId);
 
     if (ownedNodeIds.length === 0) {
       return []; // Nếu không sở hữu node nào, không có yêu cầu nào để xem
@@ -132,11 +139,14 @@ export class AccessRequestsService {
       });
     } else {
       // Cấp quyền cho một node duy nhất
-      await this.permissionService.grant({
-        userId: request.requesterId.toHexString(),
-        nodeId: request.nodeId.toHexString(),
-        permission: request.requestedPermission,
-      }, reviewer);
+      await this.permissionService.grant(
+          {
+            userId: request.requesterId.toHexString(),
+            nodeId: request.nodeId.toHexString(),
+            permission: request.requestedPermission,
+          },
+          reviewer,
+      );
     }
 
     // Cập nhật trạng thái yêu cầu
@@ -145,7 +155,7 @@ export class AccessRequestsService {
     request.reviewedAt = new Date();
 
     const savedRequest = await this.accessRequestRepository.save(request);
-  
+
     // TODO: Thêm job vào queue để gửi email thông báo cho người yêu cầu
     await this.sendResultNotification(savedRequest);
 
@@ -162,7 +172,7 @@ export class AccessRequestsService {
     request.reviewerId = reviewer._id;
     request.reviewedAt = new Date();
 
-    const savedRequest = await this.accessRequestRepository.save(request);    
+    const savedRequest = await this.accessRequestRepository.save(request);
     // TODO: Thêm job vào queue để gửi email thông báo cho người yêu cầu
     await this.sendResultNotification(savedRequest);
     return savedRequest;
@@ -171,17 +181,27 @@ export class AccessRequestsService {
   /**
    * Hàm helper private để tìm yêu cầu và kiểm tra quyền của người xử lý.
    */
-  private async findRequestAndCheckReviewerPermission(requestId: string, reviewer: User): Promise<AccessRequest> {
-    const request = await this.accessRequestRepository.findOne({ where: { _id: new ObjectId(requestId) } });
+  private async findRequestAndCheckReviewerPermission(
+      requestId: string,
+      reviewer: User,
+  ): Promise<AccessRequest> {
+    const request = await this.accessRequestRepository.findOne({
+      where: { _id: new ObjectId(requestId) },
+    });
     if (!request) throw new NotFoundException('Yêu cầu không tồn tại.');
-    if (request.status !== RequestStatus.PENDING) throw new BadRequestException('Yêu cầu này đã được xử lý.');
+    if (request.status !== RequestStatus.PENDING) {
+      throw new BadRequestException('Yêu cầu này đã được xử lý.');
+    }
 
-    const canReview = await this.permissionService.checkUserPermissionForNode(reviewer, request.nodeId, PermissionLevel.OWNER);
+    const canReview = await this.permissionService.checkUserPermissionForNode(
+        reviewer,
+        request.nodeId,
+        PermissionLevel.OWNER,
+    );
     if (!canReview) throw new ForbiddenException('Bạn không có quyền xử lý yêu cầu cho mục này.');
 
     return request;
   }
-
 
   private async sendResultNotification(request: AccessRequest) {
     try {
@@ -190,7 +210,7 @@ export class AccessRequestsService {
         this.nodeService.findById(request.nodeId),
       ]);
 
-      console.log("request", request);
+      console.log('request', request);
       if (requester && node) {
         await this.emailProducerService.sendRequestProcessedEmail({
           requesterEmail: requester.email,

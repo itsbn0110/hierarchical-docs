@@ -7,13 +7,13 @@ export interface NewAccessRequestJobData {
   ownerEmail: string;
   requesterName: string;
   nodeName: string;
-  loginUrl: string; 
+  loginUrl: string;
 }
 
 export interface RequestProcessedJobData {
   requesterEmail: string;
   nodeName: string;
-  status: 'APPROVED' | 'DENIED'; 
+  status: 'APPROVED' | 'DENIED';
   loginUrl: string;
 }
 
@@ -64,4 +64,3 @@ export class EmailProducerService {
     await this.emailQueue.add('welcome-email', data, { removeOnComplete: true });
   }
 }
-

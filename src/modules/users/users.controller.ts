@@ -10,18 +10,17 @@ import { UserRole } from 'src/common/enums/projects.enum';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { IsChangePasswordRoute } from '../auth/decorators/change-password.decorator';
 import { ChangePasswordDto } from './dto/change-password.dto';
-import { Public } from '../auth/decorators/public.decorator';
 
 @Controller('users')
 @UseGuards(RolesGuard)
-@ApiBearerAuth() 
+@ApiBearerAuth()
 @ApiTags('Users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @ApiOperation({ summary: 'Root Admin tạo mới người dùng' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Tạo người dùng thành công',
     type: LoginResponseDto, // Nếu muốn mô tả response cụ thể hơn
   })
@@ -73,21 +72,16 @@ export class UsersController {
     return this.usersService.remove(id);
   }
 
-
   @Patch(':id/status')
   @Roles(UserRole.ROOT_ADMIN)
-  updateStatus(
-    @Param('id') id: string,
-    @Body() updateUserStatusDto: UpdateUserStatusDto,
-  ) {
+  updateStatus(@Param('id') id: string, @Body() updateUserStatusDto: UpdateUserStatusDto) {
     return this.usersService.updateStatus(id, updateUserStatusDto.isActive);
   }
 
-
   @Patch('me/password')
-  @IsChangePasswordRoute() 
+  @IsChangePasswordRoute()
   changeMyPassword(@Req() req, @Body() changePasswordDto: ChangePasswordDto) {
-      console.log(req.user);
-      return this.usersService.changePassword(req.user._id, changePasswordDto);
+    console.log(req.user);
+    return this.usersService.changePassword(req.user._id, changePasswordDto);
   }
 }

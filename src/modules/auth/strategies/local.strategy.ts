@@ -12,14 +12,21 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
     super({ usernameField: 'email' });
   }
   async validate(email: string, pass: string): Promise<any> {
-    
     const user = await this.authService.validateUser(email, pass);
 
     if (!user) {
-      throw new BusinessException(ErrorCode.USER_NOT_FOUND, ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND );
+      throw new BusinessException(
+          ErrorCode.USER_NOT_FOUND,
+          ErrorMessages.USER_NOT_FOUND,
+          HttpStatus.NOT_FOUND,
+      );
     }
     if (!user.isActive) {
-      throw new BusinessException(ErrorCode.ACCOUNT_DISABLED, ErrorMessages.ACCOUNT_DISABLED, HttpStatus.FORBIDDEN );
+      throw new BusinessException(
+          ErrorCode.ACCOUNT_DISABLED,
+          ErrorMessages.ACCOUNT_DISABLED,
+          HttpStatus.FORBIDDEN,
+      );
     }
     return user;
   }

@@ -14,11 +14,11 @@ export class PasswordPolicyGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    const isChangePasswordRoute = this.reflector.getAllAndOverride<boolean>(IS_CHANGE_PASSWORD_ROUTE_KEY, [
-        context.getHandler(),
-        context.getClass(),
-    ]);
-    
+    const isChangePasswordRoute = this.reflector.getAllAndOverride<boolean>(
+        IS_CHANGE_PASSWORD_ROUTE_KEY,
+        [context.getHandler(), context.getClass()],
+    );
+
     if (isPublic) return true;
 
     const { user } = context.switchToHttp().getRequest();
@@ -26,7 +26,9 @@ export class PasswordPolicyGuard implements CanActivate {
     if (user.role === UserRole.ROOT_ADMIN) return true;
 
     if (user && user.mustChangePassword && !isChangePasswordRoute) {
-      throw new ForbiddenException('Bạn phải đổi mật khẩu trước khi có thể thực hiện các hành động khác.');
+      throw new ForbiddenException(
+          'Bạn phải đổi mật khẩu trước khi có thể thực hiện các hành động khác.',
+      );
     }
 
     return true;

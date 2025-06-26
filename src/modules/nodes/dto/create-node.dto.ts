@@ -3,14 +3,13 @@ import { IsString, IsNotEmpty, IsEnum, IsOptional, IsMongoId } from 'class-valid
 import { NodeType } from 'src/common/enums/projects.enum';
 
 export class CreateNodeDto {
-  
   @ApiProperty({
     description: 'Tên của node (thư mục hoặc file).',
     example: 'Báo cáo Quý 4',
   })
   @IsString({ message: 'Tên không được để trống' })
   @IsNotEmpty()
-  name: string;
+    name: string;
 
   @ApiProperty({
     description: 'Loại của node.',
@@ -19,7 +18,7 @@ export class CreateNodeDto {
   })
   @IsEnum(NodeType, { message: 'Loại node không hợp lệ. Chỉ chấp nhận FOLDER hoặc FILE.' })
   @IsNotEmpty()
-  type: NodeType;
+    type: NodeType;
 
   @ApiPropertyOptional({
     description: 'ID của thư mục cha. Để trống hoặc gửi null để tạo ở cấp gốc.',
@@ -29,14 +28,13 @@ export class CreateNodeDto {
   })
   @IsOptional()
   @IsMongoId({ message: 'parentId phải là một ID hợp lệ của MongoDB.' })
-  parentId: string | null;
+    parentId: string | null;
 
- 
   @ApiPropertyOptional({
     description: 'Nội dung văn bản, chỉ áp dụng khi type là FILE.',
     example: 'Đây là nội dung của tài liệu...',
   })
   @IsOptional()
   @IsString()
-  content?: string;
+    content?: string;
 }

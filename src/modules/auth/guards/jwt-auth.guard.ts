@@ -11,20 +11,16 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     super();
   }
 
-  // Ghi đè phương thức canActivate
   canActivate(context: ExecutionContext) {
-    // 1. Dùng Reflector để kiểm tra xem có metadata 'isPublic' không
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
 
-    // 2. Nếu có, tức là route này được đánh dấu @Public() -> Cho qua luôn
     if (isPublic) {
       return true;
     }
 
-    // 3. Nếu không, hãy thực hiện quy trình xác thực JWT như bình thường
     return super.canActivate(context);
   }
 }

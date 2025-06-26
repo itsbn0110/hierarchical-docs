@@ -1,18 +1,11 @@
-import {
-  Controller,
-  Post,
-  Body,
-  Request,
-  Get,
-  Param,
-} from '@nestjs/common';
+import { Controller, Post, Body, Request, Get, Param } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AccessRequestsService } from './access-requests.service';
 import { CreateAccessRequestDto } from './dto/create-access-request.dto';
 import { AccessRequest } from './entities/access-request.entity';
 
-@ApiTags('Access Requests') 
-@ApiBearerAuth() 
+@ApiTags('Access Requests')
+@ApiBearerAuth()
 @Controller('access-requests')
 export class AccessRequestsController {
   constructor(private readonly accessRequestsService: AccessRequestsService) {}
@@ -21,7 +14,7 @@ export class AccessRequestsController {
   @ApiOperation({ summary: 'Tạo một yêu cầu xin quyền truy cập mới' })
   create(
     @Body() createAccessRequestDto: CreateAccessRequestDto,
-    @Request() req, 
+    @Request() req,
   ): Promise<AccessRequest> {
     return this.accessRequestsService.createAccessRequest(createAccessRequestDto, req.user);
   }
@@ -31,7 +24,6 @@ export class AccessRequestsController {
   findPendingRequests(@Request() req) {
     return this.accessRequestsService.findPendingRequestsForOwner(req.user);
   }
-
 
   @Post(':id/approve')
   @ApiOperation({ summary: 'Phê duyệt một yêu cầu truy cập' })

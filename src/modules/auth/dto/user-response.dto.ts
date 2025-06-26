@@ -7,17 +7,17 @@ import { transformObjectId } from 'src/common/helpers/transform.helpers';
 export class UserResponseDto {
   @Expose()
   @Transform(transformObjectId)
-  _id: ObjectId;
+    _id: ObjectId;
 
   @Expose()
-  username: string;
+    username: string;
 
   @Expose()
-  email: string;
+    email: string;
 
   @Expose()
-  role: UserRole;
+    role: UserRole;
 
   @Expose()
-  isActive: boolean;
+    isActive: boolean;
 }

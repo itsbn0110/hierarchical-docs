@@ -3,7 +3,6 @@ import { BullModule } from '@nestjs/bull';
 import { TasksProducerService } from './tasks-producer.service';
 import { TasksConsumerService } from './tasks-consumer.service';
 import { PermissionsModule } from '../permissions/permissions.module';
-import { AccessRequestsModule } from '../access-requests/access-requests.module';
 
 @Module({
   imports: [

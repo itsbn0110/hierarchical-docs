@@ -17,15 +17,15 @@ export class TasksProducerService {
 
   async addRecursivePermissionJob(data: RecursivePermissionJobData) {
     await this.tasksQueue.add('process-recursive-permission', data, {
-        removeOnComplete: true,
-        removeOnFail: {
-            count: 5, // Giữ lại 5 job lỗi gần nhất để debug
-        },
-        attempts: 3, // Tự động thử lại 3 lần nếu thất bại
-        backoff: {
-            type: 'exponential',
-            delay: 5000, // 5s, 10s, 20s
-        },
+      removeOnComplete: true,
+      removeOnFail: {
+        count: 5, // Giữ lại 5 job lỗi gần nhất để debug
+      },
+      attempts: 3, // Tự động thử lại 3 lần nếu thất bại
+      backoff: {
+        type: 'exponential',
+        delay: 5000, // 5s, 10s, 20s
+      },
     });
     console.log(`Đã thêm job xử lý quyền đệ quy vào hàng đợi 'tasks'.`);
   }

@@ -4,13 +4,13 @@ import { UserRole } from 'src/common/enums/projects.enum';
 export class UpdateUserDto {
   @IsOptional()
   @IsString()
-  username?: string;
+    username?: string;
 
   @IsOptional()
   @IsEnum(UserRole)
-  role?: UserRole;
-  
+    role?: UserRole;
+
   @IsOptional()
   @IsBoolean()
-  isActive?: boolean;
+    isActive?: boolean;
 }

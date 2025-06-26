@@ -1,13 +1,6 @@
 // src/users/entities/user.entity.ts
 
-import {
-  Entity,
-  ObjectIdColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  Index,
-} from 'typeorm';
+import { Entity, ObjectIdColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { ObjectId } from 'mongodb';
 import { UserRole } from 'src/common/enums/projects.enum';
 import { Exclude, Expose, Transform } from 'class-transformer';
@@ -19,41 +12,41 @@ export class User {
   @Expose()
   @Transform(transformObjectId)
   @ObjectIdColumn()
-  _id: ObjectId;
+    _id: ObjectId;
 
   @Expose()
   @Column()
   @Index({ unique: true })
-  email: string;
-  
+    email: string;
+
   @Expose()
   @Column()
-  username: string;
-  
+    username: string;
+
   @Column()
-  hashPassword: string;
-  
+    hashPassword: string;
+
   @Expose()
   @Column({
     type: 'enum',
     enum: UserRole,
     default: UserRole.USER,
   })
-  role: UserRole;
-  
+    role: UserRole;
+
   @Expose()
   @Column({ default: true })
-  isActive: boolean;
-  
+    isActive: boolean;
+
   @Expose()
   @Column({ default: true })
-  mustChangePassword: boolean;
+    mustChangePassword: boolean;
 
   @Expose()
   @CreateDateColumn()
-  createdAt: Date;
+    createdAt: Date;
 
   @Expose()
   @UpdateDateColumn()
-  updatedAt: Date;
+    updatedAt: Date;
 }
