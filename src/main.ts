@@ -5,6 +5,9 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { PasswordPolicyGuard } from './modules/auth/guards/password-policy.guard';
+
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -31,6 +34,12 @@ async function bootstrap() {
     excludeExtraneousValues: true
   }));
 
+  const reflector = app.get(Reflector);
+  app.useGlobalGuards(
+    new JwtAuthGuard(reflector),
+    new PasswordPolicyGuard(reflector),
+  );
+ 
   const config = new DocumentBuilder()
     .setTitle('Hierarchical Document Management API')
     .setDescription('API documentation')

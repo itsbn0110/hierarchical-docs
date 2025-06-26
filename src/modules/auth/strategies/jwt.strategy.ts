@@ -27,8 +27,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (user && !user.isActive) {
      throw new BusinessException(ErrorCode.USER_NOT_FOUND, ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND );
     }
-    // 3. Trả về một đối tượng user. Đối tượng này sẽ được NestJS tự động
-    // gắn vào `request.user` để sử dụng ở các bước sau (trong Controller).
+    
     return user; 
-}
+  }
 }

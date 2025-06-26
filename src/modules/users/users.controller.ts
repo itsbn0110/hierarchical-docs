@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Req } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -7,10 +7,13 @@ import { LoginResponseDto } from '../auth/dto/login-response.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserRole } from 'src/common/enums/projects.enum';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+import { IsChangePasswordRoute } from '../auth/decorators/change-password.decorator';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { Public } from '../auth/decorators/public.decorator';
+
 @Controller('users')
-@UseGuards(JwtAuthGuard,RolesGuard)
+@UseGuards(RolesGuard)
 @ApiBearerAuth() 
 @ApiTags('Users')
 export class UsersController {
@@ -44,7 +47,7 @@ export class UsersController {
   @Roles(UserRole.ROOT_ADMIN)
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
+    return this.usersService.findById(id);
   }
 
   @ApiOperation({ summary: 'Root Admin cập nhật người dùng' })
@@ -55,7 +58,7 @@ export class UsersController {
   @Roles(UserRole.ROOT_ADMIN)
   @Patch(':id')
   async updateUser(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    const user = await this.usersService.update(id, updateUserDto);
+    const user = await this.usersService.updateProfile(id, updateUserDto);
     return {
       success: true,
       message: 'Cập nhật người dùng thành công',
@@ -72,12 +75,19 @@ export class UsersController {
 
 
   @Patch(':id/status')
-  @UseGuards(JwtAuthGuard, RolesGuard) 
   @Roles(UserRole.ROOT_ADMIN)
   updateStatus(
     @Param('id') id: string,
     @Body() updateUserStatusDto: UpdateUserStatusDto,
   ) {
     return this.usersService.updateStatus(id, updateUserStatusDto.isActive);
+  }
+
+
+  @Patch('me/password')
+  @IsChangePasswordRoute() 
+  changeMyPassword(@Req() req, @Body() changePasswordDto: ChangePasswordDto) {
+      console.log(req.user);
+      return this.usersService.changePassword(req.user._id, changePasswordDto);
   }
 }

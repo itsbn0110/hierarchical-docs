@@ -9,6 +9,7 @@ import { User } from './modules/users/entities/user.entity';
 import { Node } from './modules/nodes/entities/node.entity';
 import { Permission } from './modules/permissions/entities/permission.entity';
 import { AccessRequest } from './modules/access-requests/entities/access-request.entity';
+import { ActivityLog } from './modules/activity-log/entities/activity-log.entity';
 // ----------------------------------------------------
 
 import { UsersModule } from './modules/users/users.module';
@@ -19,6 +20,7 @@ import { AccessRequestsModule } from './modules/access-requests/access-requests.
 import { bullConfig } from './config/queue.config';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { SearchModule } from './modules/search/search.module';
+import { ActivityLogModule } from './modules/activity-log/activity-log.module';
 
 @Module({
   imports: [
@@ -35,9 +37,9 @@ import { SearchModule } from './modules/search/search.module';
         useNewUrlParser: true,
         useUnifiedTopology: true,
         database: config.get<string>('MONGODB_DBNAME'),
-        entities: [User, Node, Permission, AccessRequest],
+        entities: [User, Node, Permission, AccessRequest, ActivityLog],
         // -----------------------------------------------------------
-        
+
         synchronize: true, // Chỉ nên dùng trong môi trường dev
       }),
     }),
@@ -52,7 +54,8 @@ import { SearchModule } from './modules/search/search.module';
     NodesModule,
     PermissionsModule,
     AccessRequestsModule,
-    SearchModule
+    SearchModule,
+    ActivityLogModule,
   ],
   providers: [
     {

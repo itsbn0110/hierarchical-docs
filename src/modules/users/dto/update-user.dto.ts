@@ -1,6 +1,16 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateUserDto } from './create-user.dto';
+import { IsString, IsOptional, IsEnum, IsBoolean } from 'class-validator';
+import { UserRole } from 'src/common/enums/projects.enum';
 
-// PartialType sẽ lấy tất cả các thuộc tính và validation rule của CreateUserDto
-// và làm cho chúng trở nên không bắt buộc (@IsOptional())
-export class UpdateUserDto extends PartialType(CreateUserDto) {}
+export class UpdateUserDto {
+  @IsOptional()
+  @IsString()
+  username?: string;
+
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
+  
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}

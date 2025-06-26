@@ -8,14 +8,24 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { MongoRepository } from 'typeorm';
 import { ObjectId } from 'mongodb';
 import { PermissionLevel, RequestStatus } from 'src/common/enums/projects.enum';
-
+import { EmailProducerService } from '../email/email-producer.service';
+import { UsersService } from '../users/users.service';
+import { ConfigService } from '@nestjs/config';
+import { TasksProducerService } from '../tasks/tasks-producer.service';
 @Injectable()
 export class AccessRequestsService {
   constructor (
+    private readonly configService: ConfigService,
     @Inject(forwardRef(() => PermissionsService))
     private readonly permissionService: PermissionsService,
     @Inject(forwardRef(() => NodesService))
     private readonly nodeService: NodesService,
+    @Inject(forwardRef(() => EmailProducerService))
+    private readonly emailProducerService: EmailProducerService,
+    @Inject(forwardRef(() => UsersService))
+    private readonly usersService: UsersService,
+    @Inject(forwardRef(() => TasksProducerService))
+    private readonly tasksProducerService: TasksProducerService,
     @InjectRepository(AccessRequest)
     private readonly accessRequestRepository: MongoRepository <AccessRequest>,
   ) {}
@@ -62,10 +72,26 @@ export class AccessRequestsService {
 
     const savedRequest = await this.accessRequestRepository.save(newRequest);
 
-     // --- 3. GỬI THÔNG BÁO CHO CÁC OWNER (Sẽ tích hợp BullMQ sau) ---
-    // TODO: Thêm job vào hàng đợi (queue) để gửi email cho các Owner của node
-    console.log(`ĐÃ TẠO YÊU CẦU: Gửi thông báo cho các Owner của Node ${nodeId}`);
+   try {
+      const ownerIds = await this.permissionService.findOwnerIdsOfNode(new ObjectId(dto.nodeId));
+      const owners = await this.usersService.findByIds(ownerIds);
 
+      const loginUrl = this.configService.get<string>('FRONTEND_URL');
+      for (const owner of owners) {
+        if (owner.email) {
+          await this.emailProducerService.sendNewAccessRequestEmail({
+            ownerEmail: owner.email,
+            requesterName: requester.username,
+            nodeName: node.name,
+            loginUrl: loginUrl,
+          });
+        }
+      }
+    } catch (error) {
+      // Nếu có lỗi khi kết nối hoặc thêm job vào Redis,
+      // chúng ta sẽ ghi lại log lỗi nhưng không làm sập request chính.
+      console.error('LỖI HÀNG ĐỢI: Không thể thêm job gửi email vào queue.', error.message);
+    }
     return savedRequest;
   }
 
@@ -97,8 +123,13 @@ export class AccessRequestsService {
 
     // Kiểm tra nếu yêu cầu là đệ quy
     if (request.isRecursive) {
-      // Gọi logic cấp quyền đệ quy (chúng ta sẽ hoàn thiện hàm này sau)
-      await this.permissionService.grantRecursive(request.nodeId, request.requesterId, request.requestedPermission, reviewer._id);
+      // THÊM JOB VÀO HÀNG ĐỢI, KHÔNG XỬ LÝ TRỰC TIẾP
+      await this.tasksProducerService.addRecursivePermissionJob({
+        parentNodeId: request.nodeId,
+        targetUserId: request.requesterId,
+        permission: request.requestedPermission,
+        granterId: reviewer._id,
+      });
     } else {
       // Cấp quyền cho một node duy nhất
       await this.permissionService.grant({
@@ -113,9 +144,12 @@ export class AccessRequestsService {
     request.reviewerId = reviewer._id;
     request.reviewedAt = new Date();
 
+    const savedRequest = await this.accessRequestRepository.save(request);
+  
     // TODO: Thêm job vào queue để gửi email thông báo cho người yêu cầu
+    await this.sendResultNotification(savedRequest);
 
-    return this.accessRequestRepository.save(request);
+    return savedRequest;
   }
 
   /**
@@ -128,9 +162,10 @@ export class AccessRequestsService {
     request.reviewerId = reviewer._id;
     request.reviewedAt = new Date();
 
+    const savedRequest = await this.accessRequestRepository.save(request);    
     // TODO: Thêm job vào queue để gửi email thông báo cho người yêu cầu
-
-    return this.accessRequestRepository.save(request);
+    await this.sendResultNotification(savedRequest);
+    return savedRequest;
   }
 
   /**
@@ -145,5 +180,27 @@ export class AccessRequestsService {
     if (!canReview) throw new ForbiddenException('Bạn không có quyền xử lý yêu cầu cho mục này.');
 
     return request;
+  }
+
+
+  private async sendResultNotification(request: AccessRequest) {
+    try {
+      const [requester, node] = await Promise.all([
+        this.usersService.findById(request.requesterId.toHexString()),
+        this.nodeService.findById(request.nodeId),
+      ]);
+
+      console.log("request", request);
+      if (requester && node) {
+        await this.emailProducerService.sendRequestProcessedEmail({
+          requesterEmail: requester.email,
+          nodeName: node.name,
+          status: request.status as unknown as 'APPROVED' | 'DENIED',
+          loginUrl: this.configService.get<string>('FRONTEND_URL'),
+        });
+      }
+    } catch (error) {
+      console.error(`Không thể gửi email thông báo kết quả cho yêu cầu ${request._id}:`, error);
+    }
   }
 }

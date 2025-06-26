@@ -1,13 +1,11 @@
 // src/permissions/permissions.controller.ts
 
-import { Controller, Post, Body, UseGuards, Request, Delete, HttpCode, HttpStatus, Param } from '@nestjs/common';
+import { Controller, Post, Body, Request, Delete, HttpCode, HttpStatus, Param } from '@nestjs/common';
 import { PermissionsService } from './permissions.service';
 import { GrantPermissionDto } from './dto/grant-permissions.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiBearerAuth } from '@nestjs/swagger';
 
 @Controller('permissions')
-@UseGuards(JwtAuthGuard)
 export class PermissionsController {
   constructor(private readonly permissionsService: PermissionsService) {}
 
