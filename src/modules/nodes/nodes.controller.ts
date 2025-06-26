@@ -2,17 +2,15 @@ import { Controller, Post, Body, Req, UseGuards, UseInterceptors, ClassSerialize
 import { NodesService } from './nodes.service';
 import { CreateNodeDto } from './dto/create-node.dto';
 import { Node } from './entities/node.entity';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { TreeNodeDto } from './dto/tree-node.dto';
 import { UpdateNodeNameDto } from './dto/update-node-name.dto';
 import { UpdateNodeContentDto } from './dto/update-node-content.dto';
+import { MoveNodeDto } from './dto/move-node.dto';
 
 
-@UseInterceptors(ClassSerializerInterceptor)
 @Controller('nodes')
 @ApiBearerAuth() 
-@UseGuards(JwtAuthGuard)
 export class NodesController {
   constructor(private readonly nodesService: NodesService) {}
   
@@ -50,6 +48,16 @@ export class NodesController {
     return this.nodesService.updateContent(id, updateNodeContentDto, req.user);
   }
 
+  @Patch(':id/move')
+  @ApiOperation({ summary: 'Di chuyển một node đến vị trí mới' })
+  moveNode(
+    @Param('id') id: string,
+    @Body() moveNodeDto: MoveNodeDto,
+    @Req() req,
+  ) {
+    return this.nodesService.move(id, moveNodeDto, req.user);
+  }
+
 
   @Delete(':id')
   async delete(@Param('id') id: string, @Req() req) {
@@ -61,4 +69,3 @@ export class NodesController {
     };
   }
 }
-  

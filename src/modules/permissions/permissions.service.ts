@@ -8,15 +8,21 @@ import { UserRole } from 'src/common/enums/projects.enum';
 import { PermissionLevel } from 'src/common/enums/projects.enum';
 import { GrantPermissionDto } from './dto/grant-permissions.dto';
 import { NodesService } from '../nodes/nodes.service';
+import { EmailProducerService } from '../email/email-producer.service';
+import { UsersService } from '../users/users.service';
+import { ConfigService } from '@nestjs/config';
 @Injectable()
 export class PermissionsService {
   constructor(
+    private readonly configService: ConfigService,
     @InjectRepository(Permission)
     private readonly permissionRepository: MongoRepository<Permission>,
-
     @Inject(forwardRef(() => NodesService))
     private readonly nodesService: NodesService,
-
+    @Inject(forwardRef(() => EmailProducerService))
+    private readonly emailProducerService: EmailProducerService,
+    @Inject(forwardRef(() => UsersService))
+    private readonly usersService: UsersService,
   ) {}
   /**
    * KIỂM TRA QUYỀN CỦA USER TRÊN MỘT NODE
@@ -132,7 +138,29 @@ export class PermissionsService {
         permission: permission,
         grantedBy: granterId,
       });
-      return this.permissionRepository.save(newPermission);
+      
+      const savedPermission = await this.permissionRepository.save(newPermission);
+      
+      // --- THÊM LOGIC GỬI EMAIL THÔNG BÁO ---
+      try {
+        const [targetUser, node] = await Promise.all([
+          this.usersService.findById(targetUserId.toHexString()),
+          this.nodesService.findById(targetNodeId),
+        ]);
+
+        if (targetUser && node) {
+          await this.emailProducerService.sendPermissionGrantedEmail({
+            targetUserEmail: targetUser.email,
+            granterName: granter.username,
+            nodeName: node.name,
+            permissionLevel: savedPermission.permission,
+            loginUrl: this.configService.get<string>('FRONTEND_URL'),
+          });
+        }
+      } catch (error) {
+        console.error(`Không thể gửi email thông báo cấp quyền cho user ${userId}:`, error);
+      }
+      return savedPermission;
     }
   }
 

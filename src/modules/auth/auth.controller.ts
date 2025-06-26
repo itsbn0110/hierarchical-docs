@@ -8,6 +8,7 @@ import { Roles } from './decorators/roles.decorator';
 import { UserRole } from 'src/common/enums/projects.enum';
 import { RolesGuard } from './guards/roles.guard';
 import { AuthGuard } from '@nestjs/passport';
+import { Public } from './decorators/public.decorator';
 
 
 @Controller('auth')
@@ -26,6 +27,7 @@ export class AuthController {
     description: 'Sai thông tin đăng nhập'
   })
   @UseGuards(AuthGuard('local'))
+  @Public()
   @Post('login')
   async login(@Request() req: any, @Body() login: LoginDto) {
     const tokenInfo = await this.authService.login(req.user);
@@ -37,8 +39,8 @@ export class AuthController {
   } 
 
   @ApiBearerAuth() 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ROOT_ADMIN)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.USER)
   @ApiOperation({ summary: 'Lấy thông tin profile của người dùng hiện tại' })
   @Get('profile')
   getProfile(@Request() req: any) {

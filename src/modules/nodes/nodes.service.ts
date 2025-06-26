@@ -8,7 +8,7 @@ import { ObjectId } from 'mongodb';
 import { Node } from './entities/node.entity';
 import { CreateNodeDto } from './dto/create-node.dto';
 import { User } from '../users/entities/user.entity';
-import { NodeType, UserRole } from 'src/common/enums/projects.enum';
+import { ActivityAction, NodeType, UserRole } from 'src/common/enums/projects.enum';
 import { PermissionLevel } from 'src/common/enums/projects.enum';
 import { PermissionsService } from '../permissions/permissions.service';
 import { TreeNodeDto } from './dto/tree-node.dto';
@@ -17,6 +17,8 @@ import { UpdateNodeNameDto } from './dto/update-node-name.dto';
 import { UpdateNodeContentDto } from './dto/update-node-content.dto';
 import { Permission } from '../permissions/entities/permission.entity';
 import { AccessRequest } from '../access-requests/entities/access-request.entity';
+import { ActivityLogProducerService } from '../activity-log/activity-log-producer.service';
+import { MoveNodeDto } from './dto/move-node.dto';
 
 type Ancestor = {
   _id: ObjectId;
@@ -32,6 +34,9 @@ export class NodesService {
     @Inject(forwardRef(() => PermissionsService))
     private readonly permissionsService: PermissionsService,
 
+    @Inject(forwardRef(() => ActivityLogProducerService))
+    private readonly activityLogProducer: ActivityLogProducerService,
+    
     @InjectConnection() private readonly connection: Connection
   ) {}
 
@@ -99,6 +104,18 @@ export class NodesService {
       user._id // Ghi nhận người thực hiện hành động này là người tạo
     );
 
+
+    // --- TÍCH HỢP GHI LOG ---
+    await this.activityLogProducer.logActivity({
+        userId: user._id,
+        action: ActivityAction.NODE_CREATED,
+        targetId: newNode._id,
+        details: {
+          name: newNode.name,
+          type: newNode.type,
+          parentId: newNode.parentId,
+        },
+    });
     return newNode;
   }
 
@@ -277,8 +294,112 @@ export class NodesService {
     return { deletedCount: idsToDelete.length };
   }
 
+  async move(nodeId: string, dto: MoveNodeDto, user: User): Promise<Node> {
+    const { newParentId } = dto;
+    const nodeToMoveId = new ObjectId(nodeId);
+    const newParentObjectId = newParentId ? new ObjectId(newParentId) : null;
+
+    // --- 1. LẤY DỮ LIỆU VÀ KIỂM TRA QUYỀN BAN ĐẦU ---
+    const [nodeToMove, newParentNode] = await Promise.all([
+      this.nodesRepository.findOne({ where: { _id: nodeToMoveId } }),
+      newParentObjectId ? this.nodesRepository.findOne({ where: { _id: newParentObjectId } }) : null,
+    ]);
+
+    if (!nodeToMove) throw new NotFoundException('Mục cần di chuyển không tồn tại.');
+    if (newParentId && !newParentNode) throw new NotFoundException('Thư mục đích không tồn tại.');
+
+    if (newParentNode?.type !== NodeType.FOLDER) {
+      throw new BadRequestException('Không thể di chuyển vào một file.');
+    }
+
+    // Kiểm tra quyền trên node bị di chuyển (phải là Owner)
+    const canMove = await this.permissionsService.checkUserPermissionForNode(user, nodeToMove._id, PermissionLevel.OWNER);
+    if (!canMove) throw new ForbiddenException('Bạn không có quyền di chuyển mục này.');
+
+    // Kiểm tra quyền trên thư mục đích (phải là Editor)
+    if (newParentNode) {
+      const canDrop = await this.permissionsService.checkUserPermissionForNode(user, newParentNode._id, PermissionLevel.EDITOR);
+      if (!canDrop) throw new ForbiddenException('Bạn không có quyền di chuyển vào thư mục đích.');
+    }
+
+    // --- 2. NGĂN CHẶN DI CHUYỂN VÒNG LẶP ---
+    if (newParentNode) {
+      const isMovingIntoSelfOrDescendant = newParentNode._id.equals(nodeToMoveId) || 
+                                           newParentNode.ancestors.some(ancestor => ancestor._id.equals(nodeToMoveId));
+      if (isMovingIntoSelfOrDescendant) {
+        throw new BadRequestException('Không thể di chuyển một thư mục vào chính nó hoặc thư mục con của nó.');
+      }
+    }
+
+    // --- 3. BẮT ĐẦU TRANSACTION ---
+    await this.connection.transaction(async transactionalEntityManager => {
+      const nodeRepo = transactionalEntityManager.getMongoRepository(Node);
+      const permissionRepo = transactionalEntityManager.getMongoRepository(Permission);
+      
+      // --- 4. CẬP NHẬT CẤU TRÚC CÂY ---
+      const oldAncestors = nodeToMove.ancestors;
+      const newAncestors = newParentNode ? [...newParentNode.ancestors, { _id: newParentNode._id, name: newParentNode.name }] : [];
+      const newLevel = newParentNode ? newParentNode.level + 1 : 0;
+
+      // Cập nhật node gốc được di chuyển
+      await nodeRepo.updateOne(
+        { _id: nodeToMoveId },
+        { $set: { parentId: newParentObjectId, ancestors: newAncestors, level: newLevel } }
+      );
+      
+      // Cập nhật tất cả con cháu nếu node được di chuyển là một thư mục
+      if (nodeToMove.type === NodeType.FOLDER) {
+        const descendants = await nodeRepo.find({ where: { 'ancestors._id': nodeToMoveId } });
+        if (descendants.length > 0) {
+            const bulkUpdateOps = descendants.map(descendant => {
+              // Xây dựng lại mảng ancestors mới cho từng con cháu
+              const newDescendantAncestors = [...newAncestors, { _id: nodeToMove._id, name: nodeToMove.name }, ...descendant.ancestors.slice(nodeToMove.ancestors.length + 1)];
+              const newDescendantLevel = newLevel + (descendant.level - nodeToMove.level);
+              return {
+                  updateOne: {
+                      filter: { _id: descendant._id },
+                      update: { $set: { ancestors: newDescendantAncestors, level: newDescendantLevel } }
+                  }
+              };
+            });
+            await nodeRepo.bulkWrite(bulkUpdateOps);
+        }
+      }
+
+      // --- 5. TÍNH TOÁN VÀ CẬP NHẬT LẠI QUYỀN OWNER KẾ THỪA ---
+      const nodesToUpdatePermissions = await nodeRepo.find({ where: { $or: [{ _id: nodeToMoveId }, { 'ancestors._id': nodeToMoveId }] } });
+      const newParentOwnerIds = newParentNode ? await this.permissionsService.findOwnerIdsOfNode(newParentNode._id) : [];
+
+      for (const node of nodesToUpdatePermissions) {
+          // Xóa tất cả quyền Owner cũ được kế thừa (giữ lại người tạo gốc)
+          await permissionRepo.deleteMany({
+            nodeId: node._id, 
+            permission: PermissionLevel.OWNER,
+            userId: { $ne: node.createdBy }
+          });
+          
+          // Gán lại quyền Owner mới từ cha
+          // Lọc ra những owner mới mà chưa phải là người tạo gốc
+          const ownersToGrant = newParentOwnerIds.filter(ownerId => !ownerId.equals(node.createdBy));
+          if(ownersToGrant.length > 0) {
+            const grantPermissions = ownersToGrant.map(ownerId => ({
+                userId: ownerId,
+                nodeId: node._id,
+                permission: PermissionLevel.OWNER,
+                grantedBy: user._id, // Người thực hiện hành động move
+                grantedAt: new Date(),
+            }));
+            await permissionRepo.insertMany(grantPermissions);
+          }
+      }
+    });
+    
+    // Trả về node đã được cập nhật thành công
+    return this.nodesRepository.findOne({ where: { _id: nodeToMoveId } });
+  }
+  
   async findById(nodeId: ObjectId): Promise<Node | null> {
-    return this.nodesRepository.findOne({ where: { _id: nodeId } });
+    return this.nodesRepository.findOne({ where: { _id: new ObjectId(nodeId) } });
   }
 
   async findAllDescendants(parentNodeId: ObjectId): Promise<Node[]> {
@@ -287,5 +408,7 @@ export class NodesService {
       where: { 'ancestors._id': parentNodeId },
     });
   }
+
+
 
 }

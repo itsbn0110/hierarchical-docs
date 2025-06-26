@@ -15,7 +15,16 @@ export enum PermissionLevel {
 }
 
 export enum RequestStatus {
-  PENDING = 'Pending',
-  APPROVED = 'Approved',
-  DENIED = 'Denied',
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  DENIED = 'DENIED',
+}
+
+export enum ActivityAction {
+  NODE_CREATED = 'NODE_CREATED',
+  NODE_RENAMED = 'NODE_RENAMED',
+  NODE_MOVED = 'NODE_MOVED',
+  NODE_DELETED = 'NODE_DELETED',
+  PERMISSION_GRANTED = 'PERMISSION_GRANTED',
+  PERMISSION_REVOKED = 'PERMISSION_REVOKED',
 }
