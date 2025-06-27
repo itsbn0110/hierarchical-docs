@@ -12,19 +12,19 @@ export class User {
   @Expose()
   @Transform(transformObjectId)
   @ObjectIdColumn()
-    _id: ObjectId;
+  _id: ObjectId;
 
   @Expose()
   @Column()
   @Index({ unique: true })
-    email: string;
+  email: string;
 
   @Expose()
   @Column()
-    username: string;
+  username: string;
 
   @Column()
-    hashPassword: string;
+  hashPassword: string;
 
   @Expose()
   @Column({
@@ -32,21 +32,24 @@ export class User {
     enum: UserRole,
     default: UserRole.USER,
   })
-    role: UserRole;
+  role: UserRole;
 
   @Expose()
   @Column({ default: true })
-    isActive: boolean;
+  isActive: boolean;
 
   @Expose()
   @Column({ default: true })
-    mustChangePassword: boolean;
+  mustChangePassword: boolean;
 
   @Expose()
   @CreateDateColumn()
-    createdAt: Date;
+  createdAt: Date;
 
   @Expose()
   @UpdateDateColumn()
-    updatedAt: Date;
+  updatedAt: Date;
+
+  @Column({ nullable: true })
+  hashedRefreshToken?: string;
 }

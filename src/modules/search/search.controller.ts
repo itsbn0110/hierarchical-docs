@@ -22,9 +22,6 @@ export class SearchController {
     return this.searchService.fullSearch(query, req.user);
   }
 
-  /**
-   * Endpoint cho gợi ý (Live search)
-   */
   @Get('suggest')
   @UseInterceptors(ClassSerializerInterceptor)
   getSuggestions(@Query('q') query: string, @Request() req): Promise<SearchResultDto[]> {

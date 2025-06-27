@@ -1,11 +1,7 @@
 import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
   forwardRef,
   Inject,
   Injectable,
-  NotFoundException,
 } from '@nestjs/common';
 import { AccessRequest } from './entities/access-request.entity';
 import { User } from '../users/entities/user.entity';
@@ -20,6 +16,9 @@ import { EmailProducerService } from '../email/email-producer.service';
 import { UsersService } from '../users/users.service';
 import { ConfigService } from '@nestjs/config';
 import { TasksProducerService } from '../tasks/tasks-producer.service';
+import { BusinessException } from 'src/common/filters/business.exception';
+import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
+import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
 @Injectable()
 export class AccessRequestsService {
   constructor(
@@ -46,7 +45,11 @@ export class AccessRequestsService {
     // 1a. Kiểm tra xem Node có tồn tại không
     const node = await this.nodeService.findById(targetNodeId);
     if (!node) {
-      throw new NotFoundException('Tài nguyên bạn yêu cầu không tồn tại.');
+      throw new BusinessException(
+          ErrorCode.DOCUMENT_NOT_FOUND,
+          ErrorMessages.DOCUMENT_NOT_FOUND,
+          404,
+      );
     }
     // 1b. Kiểm tra xem người dùng đã có quyền cao hơn hoặc bằng quyền đang xin chưa
     const hasSufficentPermission = await this.permissionService.checkUserPermissionForNode(
@@ -55,7 +58,11 @@ export class AccessRequestsService {
         requestedPermission,
     );
     if (hasSufficentPermission) {
-      throw new ConflictException('Bạn đã có quyền truy cập vào mục này rồi.');
+      throw new BusinessException(
+          ErrorCode.ACCESS_DENIED,
+          ErrorMessages.ALREADY_HAS_PERMISSION,
+          409,
+      );
     }
     // 1c. Kiểm tra xem đã có một yêu cầu đang chờ xử lý (PENDING) từ user này cho node này chưa
     const existingPendingRequest = await this.accessRequestRepository.findOne({
@@ -66,7 +73,11 @@ export class AccessRequestsService {
       },
     });
     if (existingPendingRequest) {
-      throw new ConflictException('Bạn đã gửi một yêu cầu cho mục này và đang chờ xử lý.');
+      throw new BusinessException(
+          ErrorCode.ACCESS_DENIED,
+          ErrorMessages.PENDING_REQUEST_EXISTS,
+          409,
+      );
     }
 
     const newRequest = this.accessRequestRepository.create({
@@ -118,7 +129,7 @@ export class AccessRequestsService {
     // 2. Tìm tất cả các yêu cầu đang ở trạng thái PENDING trên các node mà họ sở hữu
     return this.accessRequestRepository.find({
       where: {
-        nodeId: { $in: ownedNodeIds } as any,
+        nodeId: { $in: ownedNodeIds },
         status: RequestStatus.PENDING,
       },
       order: { createdAt: 'ASC' }, // Ưu tiên xử lý yêu cầu cũ trước
@@ -182,23 +193,33 @@ export class AccessRequestsService {
    * Hàm helper private để tìm yêu cầu và kiểm tra quyền của người xử lý.
    */
   private async findRequestAndCheckReviewerPermission(
-      requestId: string,
-      reviewer: User,
+    requestId: string,
+    reviewer: User,
   ): Promise<AccessRequest> {
     const request = await this.accessRequestRepository.findOne({
       where: { _id: new ObjectId(requestId) },
     });
-    if (!request) throw new NotFoundException('Yêu cầu không tồn tại.');
+    if (!request)
+      throw new BusinessException(
+        ErrorCode.REQUEST_NOT_FOUND,
+        ErrorMessages.REQUEST_NOT_FOUND,
+        404,
+      );
     if (request.status !== RequestStatus.PENDING) {
-      throw new BadRequestException('Yêu cầu này đã được xử lý.');
+      throw new BusinessException(
+        ErrorCode.BAD_REQUEST,
+        ErrorMessages.REQUEST_ALREADY_PROCESSED,
+        400,
+      );
     }
 
     const canReview = await this.permissionService.checkUserPermissionForNode(
-        reviewer,
-        request.nodeId,
-        PermissionLevel.OWNER,
+      reviewer,
+      request.nodeId,
+      PermissionLevel.OWNER,
     );
-    if (!canReview) throw new ForbiddenException('Bạn không có quyền xử lý yêu cầu cho mục này.');
+    if (!canReview)
+      throw new BusinessException(ErrorCode.ACCESS_DENIED, ErrorMessages.ACCESS_DENIED, 403);
 
     return request;
   }

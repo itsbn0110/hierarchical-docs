@@ -4,6 +4,9 @@ import {
   UseGuards,
   Get,
   Request,
+  Body,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ApiOperation, ApiTags, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
@@ -14,6 +17,10 @@ import { RolesGuard } from './guards/roles.guard';
 import { AuthGuard } from '@nestjs/passport';
 import { Public } from './decorators/public.decorator';
 import { User } from '../users/entities/user.entity';
+import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
+import { LoginDto } from './dto/login-request.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Controller('auth')
 @ApiTags('auth')
@@ -33,10 +40,15 @@ export class AuthController {
   @UseGuards(AuthGuard('local'))
   @Public()
   @Post('login')
-  async login(@Request() req: { user: User }): Promise<LoginResponseDto> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async login(
+    @Request() req: { user: User },
+    @Body() loginDto: LoginDto,
+  ): Promise<LoginResponseDto> {
     const tokenInfo = await this.authService.login(req.user);
     const response: LoginResponseDto = {
-      access_token: tokenInfo.access_token,
+      access_token: tokenInfo.accessToken,
+      refreshToken: tokenInfo.refreshToken,
       user: req.user,
     };
     return response;
@@ -49,5 +61,20 @@ export class AuthController {
   @Get('profile')
   getProfile(@Request() req: { user: User }): User {
     return req.user;
+  }
+
+  @Post('refresh')
+  @Public()
+  @UseGuards(JwtRefreshGuard)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async refreshTokens(@Request() req, @Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.login(req.user);
+  }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async logout(@Request() req) {
+    await this.authService.logout(req.user._id);
   }
 }

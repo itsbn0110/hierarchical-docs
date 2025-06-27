@@ -9,26 +9,25 @@ import { Expose, Exclude } from 'class-transformer';
 export class ActivityLog {
   @ObjectIdColumn()
   @Expose()
-    _id: ObjectId;
+  _id: ObjectId;
 
   @Expose()
   @Column()
-    userId: ObjectId; // Người thực hiện hành động
+  userId: ObjectId;
 
   @Expose()
   @Column({ type: 'enum', enum: ActivityAction })
-    action: ActivityAction; // Loại hành động
+  action: ActivityAction;
 
   @Expose()
   @Column()
-    targetId: ObjectId; // ID của đối tượng bị tác động (ví dụ: Node ID)
+  targetId: ObjectId;
 
-  // Lưu chi tiết của hành động dưới dạng object để linh hoạt
   @Expose()
   @Column()
-    details: Record<string, any>; // Ví dụ: { oldName: 'A', newName: 'B' }
+  details: Record<string, any>;
 
   @Expose()
   @CreateDateColumn({ type: 'timestamp' })
-    timestamp: Date;
+  timestamp: Date;
 }

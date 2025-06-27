@@ -54,15 +54,15 @@ export class SearchService {
    * Hàm helper private để "làm giàu" kết quả với thông tin quyền
    */
   private async enrichResultsWithPermissions(
-      nodes: Node[],
-      user: User,
+    nodes: Node[],
+    user: User,
   ): Promise<SearchResultDto[]> {
     if (nodes.length === 0) return [];
 
     const nodeIds = nodes.map((node) => node._id);
     const permissions = await this.permissionsService.findUserPermissionsForNodes(
-        user._id,
-        nodeIds,
+      user._id,
+      nodeIds,
     );
     const permissionMap = new Map<string, PermissionLevel>();
     permissions.forEach((p) => permissionMap.set(p.nodeId.toHexString(), p.permission));

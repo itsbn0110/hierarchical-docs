@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 export enum UserRole {
   ROOT_ADMIN = 'RootAdmin',
   USER = 'User',

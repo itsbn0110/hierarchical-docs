@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Post,
-  Body,
-  Request,
-  Delete,
-  Param,
-} from '@nestjs/common';
+import { Controller, Post, Body, Request, Delete, Param } from '@nestjs/common';
 import { PermissionsService } from './permissions.service';
 import { GrantPermissionDto } from './dto/grant-permissions.dto';
 import { ApiBearerAuth } from '@nestjs/swagger';

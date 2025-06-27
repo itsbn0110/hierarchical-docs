@@ -1,14 +1,4 @@
-import {
-  Controller,
-  Post,
-  Body,
-  Req,
-  Get,
-  Query,
-  Patch,
-  Param,
-  Delete,
-} from '@nestjs/common';
+import { Controller, Post, Body, Req, Get, Query, Patch, Param, Delete } from '@nestjs/common';
 import { NodesService } from './nodes.service';
 import { CreateNodeDto } from './dto/create-node.dto';
 import { Node } from './entities/node.entity';

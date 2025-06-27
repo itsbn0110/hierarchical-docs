@@ -10,6 +10,7 @@ import { UserRole } from 'src/common/enums/projects.enum';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { IsChangePasswordRoute } from '../auth/decorators/change-password.decorator';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { User } from './entities/user.entity';
 
 @Controller('users')
 @UseGuards(RolesGuard)
@@ -68,8 +69,8 @@ export class UsersController {
   @ApiOperation({ summary: 'Root Admin xóa người dùng' })
   @Roles(UserRole.ROOT_ADMIN)
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(id);
+  remove(@Param('id') id: string, @Req() admin: User) {
+    return this.usersService.remove(id, admin);
   }
 
   @Patch(':id/status')

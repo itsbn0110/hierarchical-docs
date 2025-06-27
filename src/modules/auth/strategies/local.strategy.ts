@@ -11,21 +11,22 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
   constructor(private authService: AuthService) {
     super({ usernameField: 'email' });
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async validate(email: string, pass: string): Promise<any> {
     const user = await this.authService.validateUser(email, pass);
 
     if (!user) {
       throw new BusinessException(
-          ErrorCode.USER_NOT_FOUND,
-          ErrorMessages.USER_NOT_FOUND,
-          HttpStatus.NOT_FOUND,
+        ErrorCode.USER_NOT_FOUND,
+        ErrorMessages.USER_NOT_FOUND,
+        HttpStatus.NOT_FOUND,
       );
     }
     if (!user.isActive) {
       throw new BusinessException(
-          ErrorCode.ACCOUNT_DISABLED,
-          ErrorMessages.ACCOUNT_DISABLED,
-          HttpStatus.FORBIDDEN,
+        ErrorCode.ACCOUNT_DISABLED,
+        ErrorMessages.ACCOUNT_DISABLED,
+        HttpStatus.FORBIDDEN,
       );
     }
     return user;

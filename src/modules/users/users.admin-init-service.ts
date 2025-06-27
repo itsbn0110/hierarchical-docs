@@ -33,9 +33,9 @@ export class AdminInitService implements OnModuleInit {
 
       if (existedEmail) {
         throw new BusinessException(
-            ErrorCode.EMAIL_ALREADY_EXISTS,
-            ErrorMessages.EMAIL_ALREADY_EXISTS,
-            HttpStatus.BAD_REQUEST,
+          ErrorCode.EMAIL_ALREADY_EXISTS,
+          ErrorMessages.EMAIL_ALREADY_EXISTS,
+          HttpStatus.BAD_REQUEST,
         );
       }
 

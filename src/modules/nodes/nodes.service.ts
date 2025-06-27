@@ -69,9 +69,9 @@ export class NodesService {
       }
 
       const canCreate = await this.permissionsService.checkUserPermissionForNode(
-          user,
-          parentNode._id,
-          PermissionLevel.EDITOR,
+        user,
+        parentNode._id,
+        PermissionLevel.EDITOR,
       );
 
       if (!canCreate && user.role !== UserRole.ROOT_ADMIN) {
@@ -106,9 +106,9 @@ export class NodesService {
 
     // Dùng hàm mới để gán quyền hàng loạt
     await this.permissionsService.grantOwnerPermissionToUsers(
-        finalOwnerIds,
-        newNode._id,
-        user._id, // Ghi nhận người thực hiện hành động này là người tạo
+      finalOwnerIds,
+      newNode._id,
+      user._id, // Ghi nhận người thực hiện hành động này là người tạo
     );
 
     // --- TÍCH HỢP GHI LOG ---
@@ -135,9 +135,9 @@ export class NodesService {
     // (Bỏ qua nếu là Root Admin hoặc đang xem ở cấp gốc)
     if (user.role !== UserRole.ROOT_ADMIN && parentObjectId) {
       const canViewParent = await this.permissionsService.checkUserPermissionForNode(
-          user,
-          parentObjectId,
-          PermissionLevel.VIEWER, // Chỉ cần ít nhất quyền xem
+        user,
+        parentObjectId,
+        PermissionLevel.VIEWER, // Chỉ cần ít nhất quyền xem
       );
 
       // Nếu không có quyền xem thư mục cha, ném lỗi Forbidden ngay lập tức.
@@ -178,8 +178,8 @@ export class NodesService {
 
     // Lấy quyền chi tiết của user trên các node này
     const permissions = await this.permissionsService.findUserPermissionsForNodes(
-        user._id,
-        nodeIds,
+      user._id,
+      nodeIds,
     );
     const permissionMap = new Map<string, PermissionLevel>();
     permissions.forEach((p) => permissionMap.set(p.nodeId.toHexString(), p.permission));
@@ -211,9 +211,9 @@ export class NodesService {
       throw new NotFoundException('Node không tồn tại.');
     }
     const canEdit = await this.permissionsService.checkUserPermissionForNode(
-        user,
-        nodeObjectId,
-        PermissionLevel.EDITOR,
+      user,
+      nodeObjectId,
+      PermissionLevel.EDITOR,
     );
     if (!canEdit) {
       throw new ForbiddenException('Bạn không có quyền sửa mục này.');
@@ -227,8 +227,8 @@ export class NodesService {
     // 3. Cập nhật tên trong mảng ancestors của tất cả con cháu
     if (nodeToUpdate.type === NodeType.FOLDER) {
       await this.nodesRepository.updateMany(
-          { 'ancestors._id': nodeObjectId },
-          { $set: { 'ancestors.$.name': newName } },
+        { 'ancestors._id': nodeObjectId },
+        { $set: { 'ancestors.$.name': newName } },
       );
     }
 
@@ -265,9 +265,9 @@ export class NodesService {
 
     // 3. Kiểm tra quyền Editor
     const canEdit = await this.permissionsService.checkUserPermissionForNode(
-        user,
-        nodeObjectId,
-        PermissionLevel.EDITOR,
+      user,
+      nodeObjectId,
+      PermissionLevel.EDITOR,
     );
     if (!canEdit) {
       throw new ForbiddenException('Bạn không có quyền sửa nội dung file này.');
@@ -288,9 +288,9 @@ export class NodesService {
     }
 
     const isOwner = await this.permissionsService.checkUserPermissionForNode(
-        user,
-        nodeToDelete._id,
-        PermissionLevel.OWNER,
+      user,
+      nodeToDelete._id,
+      PermissionLevel.OWNER,
     );
     if (!isOwner) {
       // checkUserPermissionForNode đã xử lý cho RootAdmin
@@ -346,9 +346,9 @@ export class NodesService {
     // --- 1. LẤY DỮ LIỆU VÀ KIỂM TRA QUYỀN BAN ĐẦU ---
     const [nodeToMove, newParentNode] = await Promise.all([
       this.nodesRepository.findOne({ where: { _id: nodeToMoveId } }),
-      newParentObjectId ?
-        this.nodesRepository.findOne({ where: { _id: newParentObjectId } }) :
-        null,
+      newParentObjectId
+        ? this.nodesRepository.findOne({ where: { _id: newParentObjectId } })
+        : null,
     ]);
 
     if (!nodeToMove) throw new NotFoundException('Mục cần di chuyển không tồn tại.');
@@ -360,18 +360,18 @@ export class NodesService {
 
     // Kiểm tra quyền trên node bị di chuyển (phải là Owner)
     const canMove = await this.permissionsService.checkUserPermissionForNode(
-        user,
-        nodeToMove._id,
-        PermissionLevel.OWNER,
+      user,
+      nodeToMove._id,
+      PermissionLevel.OWNER,
     );
     if (!canMove) throw new ForbiddenException('Bạn không có quyền di chuyển mục này.');
 
     // Kiểm tra quyền trên thư mục đích (phải là Editor)
     if (newParentNode) {
       const canDrop = await this.permissionsService.checkUserPermissionForNode(
-          user,
-          newParentNode._id,
-          PermissionLevel.EDITOR,
+        user,
+        newParentNode._id,
+        PermissionLevel.EDITOR,
       );
       if (!canDrop) throw new ForbiddenException('Bạn không có quyền di chuyển vào thư mục đích.');
     }
@@ -383,7 +383,7 @@ export class NodesService {
         newParentNode.ancestors.some((ancestor) => ancestor._id.equals(nodeToMoveId));
       if (isMovingIntoSelfOrDescendant) {
         throw new BadRequestException(
-            'Không thể di chuyển một thư mục vào chính nó hoặc thư mục con của nó.',
+          'Không thể di chuyển một thư mục vào chính nó hoặc thư mục con của nó.',
         );
       }
     }
@@ -395,15 +395,15 @@ export class NodesService {
 
       // --- 4. CẬP NHẬT CẤU TRÚC CÂY ---
       const oldAncestors = nodeToMove.ancestors;
-      const newAncestors = newParentNode ?
-        [...newParentNode.ancestors, { _id: newParentNode._id, name: newParentNode.name }] :
-        [];
+      const newAncestors = newParentNode
+        ? [...newParentNode.ancestors, { _id: newParentNode._id, name: newParentNode.name }]
+        : [];
       const newLevel = newParentNode ? newParentNode.level + 1 : 0;
 
       // Cập nhật node gốc được di chuyển
       await nodeRepo.updateOne(
-          { _id: nodeToMoveId },
-          { $set: { parentId: newParentObjectId, ancestors: newAncestors, level: newLevel } },
+        { _id: nodeToMoveId },
+        { $set: { parentId: newParentObjectId, ancestors: newAncestors, level: newLevel } },
       );
 
       // Cập nhật tất cả con cháu nếu node được di chuyển là một thư mục
@@ -433,9 +433,9 @@ export class NodesService {
       const nodesToUpdatePermissions = await nodeRepo.find({
         where: { $or: [{ _id: nodeToMoveId }, { 'ancestors._id': nodeToMoveId }] },
       });
-      const newParentOwnerIds = newParentNode ?
-        await this.permissionsService.findOwnerIdsOfNode(newParentNode._id) :
-        [];
+      const newParentOwnerIds = newParentNode
+        ? await this.permissionsService.findOwnerIdsOfNode(newParentNode._id)
+        : [];
 
       for (const node of nodesToUpdatePermissions) {
         // Xóa tất cả quyền Owner cũ được kế thừa (giữ lại người tạo gốc)
@@ -448,7 +448,7 @@ export class NodesService {
         // Gán lại quyền Owner mới từ cha
         // Lọc ra những owner mới mà chưa phải là người tạo gốc
         const ownersToGrant = newParentOwnerIds.filter(
-            (ownerId) => !ownerId.equals(node.createdBy),
+          (ownerId) => !ownerId.equals(node.createdBy),
         );
         if (ownersToGrant.length > 0) {
           const grantPermissions = ownersToGrant.map((ownerId) => ({

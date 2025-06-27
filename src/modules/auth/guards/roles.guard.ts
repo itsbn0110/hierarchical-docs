@@ -31,9 +31,9 @@ export class RolesGuard implements CanActivate {
     if (!user) {
       // Chỉ cần check user, role sẽ check sau
       throw new BusinessException(
-          ErrorCode.ACCESS_DENIED,
-          ErrorMessages.ACCESS_DENIED,
-          HttpStatus.FORBIDDEN,
+        ErrorCode.ACCESS_DENIED,
+        ErrorMessages.ACCESS_DENIED,
+        HttpStatus.FORBIDDEN,
       );
     }
 

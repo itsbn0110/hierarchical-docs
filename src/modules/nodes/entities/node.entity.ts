@@ -9,11 +9,11 @@ export class Ancestor {
   @Transform(transformObjectId)
   @ObjectIdColumn()
   @Expose()
-    _id: ObjectId;
+  _id: ObjectId;
 
   @Expose()
   @Column()
-    name: string;
+  name: string;
 }
 
 @Exclude()
@@ -22,33 +22,33 @@ export class Node {
   @Expose()
   @Transform(transformObjectId)
   @ObjectIdColumn()
-    _id: ObjectId;
+  _id: ObjectId;
 
   @Expose()
   @Column()
-    name: string;
+  name: string;
 
   @Expose()
   @Column({
     type: 'enum',
     enum: NodeType,
   })
-    type: NodeType;
+  type: NodeType;
 
   @Expose()
   @Transform((params) => exposeBasedOnNodeType(NodeType.FILE, params))
   @Column({ nullable: true })
-    content?: string;
+  content?: string;
 
   @Expose()
   @Transform(transformObjectId)
   @Column({ nullable: true })
-    parentId: ObjectId | null;
+  parentId: ObjectId | null;
 
   @Expose()
   @Column({ default: [] })
   @Type(() => Ancestor)
-    ancestors: {
+  ancestors: {
     _id: ObjectId;
     name: string;
   }[];
@@ -57,18 +57,18 @@ export class Node {
   @Column({ type: 'number', default: 0 })
   @IsInt()
   @Min(0)
-    level: number;
+  level: number;
 
   @Transform(transformObjectId)
   @Expose()
   @Column()
-    createdBy: ObjectId;
+  createdBy: ObjectId;
 
   @Expose()
   @CreateDateColumn({ type: 'timestamp' })
-    createdAt: Date;
+  createdAt: Date;
 
   @Expose()
   @UpdateDateColumn({ type: 'timestamp' })
-    updatedAt: Date;
+  updatedAt: Date;
 }

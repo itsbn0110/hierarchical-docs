@@ -8,20 +8,20 @@ const transformObjectId = ({ value }) => (value instanceof ObjectId ? value.toHe
 export class TreeNodeDto {
   @Expose()
   @Transform(transformObjectId)
-    id: ObjectId;
+  id: ObjectId;
 
   @Expose()
-    name: string;
+  name: string;
 
   @Expose()
-    type: NodeType;
+  type: NodeType;
 
   @Expose()
-    level: number;
+  level: number;
 
   @Expose()
-    hasChildren: boolean;
+  hasChildren: boolean;
 
   @Expose()
-    userPermission: PermissionLevel | null;
+  userPermission: PermissionLevel | null;
 }

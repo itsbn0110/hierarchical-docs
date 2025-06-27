@@ -21,7 +21,7 @@ export class CreateAccessRequestDto {
   })
   @IsNotEmpty({ message: 'nodeId không được để trống.' })
   @IsMongoId({ message: 'nodeId phải là một ID hợp lệ của MongoDB.' })
-    nodeId: string;
+  nodeId: string;
 
   /**
    * Cấp độ quyền mà người dùng yêu cầu.
@@ -36,7 +36,7 @@ export class CreateAccessRequestDto {
   @IsEnum([PermissionLevel.VIEWER, PermissionLevel.EDITOR], {
     message: 'Cấp độ quyền chỉ có thể là VIEWER hoặc EDITOR.',
   })
-    requestedPermission: PermissionLevel;
+  requestedPermission: PermissionLevel;
 
   /**
    * Áp dụng yêu cầu cho cả các thư mục con (nếu node là một thư mục).
@@ -48,7 +48,7 @@ export class CreateAccessRequestDto {
   })
   @IsOptional()
   @IsBoolean()
-    isRecursive?: boolean;
+  isRecursive?: boolean;
 
   /**
    * Lời nhắn gửi cho chủ sở hữu.
@@ -61,5 +61,5 @@ export class CreateAccessRequestDto {
   @IsOptional()
   @IsString()
   @MaxLength(500)
-    message?: string;
+  message?: string;
 }

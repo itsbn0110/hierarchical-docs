@@ -13,36 +13,36 @@ async function bootstrap() {
   app.use(helmet());
 
   app.use(
-      rateLimit({
-        windowMs: 15 * 60 * 1000,
-        max: 100,
-        message: 'Too many requests from this IP, please try again later.',
-      }),
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 100,
+      message: 'Too many requests from this IP, please try again later.',
+    }),
   );
 
   app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
   );
 
   app.useGlobalInterceptors(
-      new ClassSerializerInterceptor(app.get(Reflector), {
-        excludeExtraneousValues: true,
-      }),
+    new ClassSerializerInterceptor(app.get(Reflector), {
+      excludeExtraneousValues: true,
+    }),
   );
 
   const reflector = app.get(Reflector);
   app.useGlobalGuards(new JwtAuthGuard(reflector), new PasswordPolicyGuard(reflector));
 
   const config = new DocumentBuilder()
-      .setTitle('Hierarchical Document Management API')
-      .setDescription('API documentation')
-      .setVersion('1.0')
-      .addBearerAuth()
-      .build();
+    .setTitle('Hierarchical Document Management API')
+    .setDescription('API documentation')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, document);
 

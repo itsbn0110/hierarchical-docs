@@ -9,7 +9,7 @@ export class GrantPermissionDto {
   })
   @IsNotEmpty({ message: 'userId không được để trống.' })
   @IsMongoId({ message: 'userId phải là một ID hợp lệ.' })
-    userId: string;
+  userId: string;
 
   @ApiProperty({
     description: 'ID của node (thư mục/file) được gán quyền.',
@@ -17,7 +17,7 @@ export class GrantPermissionDto {
   })
   @IsNotEmpty({ message: 'nodeId không được để trống.' })
   @IsMongoId({ message: 'nodeId phải là một ID hợp lệ.' })
-    nodeId: string;
+  nodeId: string;
 
   @ApiProperty({
     description: 'Cấp độ quyền được gán.',
@@ -26,5 +26,5 @@ export class GrantPermissionDto {
   })
   @IsEnum(PermissionLevel, { message: 'Cấp độ quyền không hợp lệ.' })
   @IsNotEmpty({ message: 'Cấp độ quyền không được để trống.' })
-    permission: PermissionLevel;
+  permission: PermissionLevel;
 }

@@ -14,5 +14,5 @@ export class MoveNodeDto {
   })
   @IsOptional()
   @IsMongoId({ message: 'newParentId phải là một ID hợp lệ.' })
-    newParentId: string | null;
+  newParentId: string | null;
 }

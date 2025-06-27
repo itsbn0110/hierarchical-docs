@@ -51,7 +51,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       } else {
         message = typeof res === 'string' ? res : JSON.stringify(res);
       }
-    // eslint-disable-next-line brace-style
     }
     // 3. Bắt tất cả các lỗi còn lại (lỗi 500 không lường trước)
     else {
@@ -61,7 +60,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     this.logger.error(
-        `[${request.method}] ${request.url} - Status: ${status} - Error: ${error} - Message: ${message}`,
+      `[${request.method}] ${request.url} - Status: ${status} - Error: ${error} - Message: ${message}`,
       exception instanceof Error ? exception.stack : JSON.stringify(exception),
     );
 

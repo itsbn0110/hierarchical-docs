@@ -9,4 +9,15 @@ export enum ErrorCode {
   CANNOT_CREATE_USER = 'E1007',
   ACCOUNT_DISABLED = 'E1008',
   ACCESS_DENIED = 'E1009',
+
+  // Request related
+  REQUEST_NOT_FOUND = 'E2001',
+  REQUEST_ALREADY_PROCESSED = 'E2002',
+  PENDING_REQUEST_EXISTS = 'E2003',
+
+  // Permission related
+  PERMISSION_NOT_FOUND = 'E3001',
+
+  // General
+  BAD_REQUEST = 'E9001',
 }

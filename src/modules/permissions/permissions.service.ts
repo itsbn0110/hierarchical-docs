@@ -1,10 +1,4 @@
-import {
-  ForbiddenException,
-  forwardRef,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MongoRepository } from 'typeorm';
 import { ObjectId } from 'mongodb';
@@ -18,6 +12,9 @@ import { EmailProducerService } from '../email/email-producer.service';
 import { UsersService } from '../users/users.service';
 import { ConfigService } from '@nestjs/config';
 import { ActivityLogProducerService } from '../activity-log/activity-log-producer.service';
+import { BusinessException } from 'src/common/filters/business.exception';
+import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
+import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
 @Injectable()
 export class PermissionsService {
   constructor(
@@ -42,9 +39,9 @@ export class PermissionsService {
    * @returns `true` nếu người dùng có quyền, `false` nếu không.
    */
   async checkUserPermissionForNode(
-      user: User,
-      nodeId: ObjectId,
-      requiredPermission: PermissionLevel,
+    user: User,
+    nodeId: ObjectId,
+    requiredPermission: PermissionLevel,
   ): Promise<boolean> {
     // Quy tắc 1: Root Admin luôn có mọi quyền
     if (user.role === UserRole.ROOT_ADMIN) {
@@ -108,19 +105,22 @@ export class PermissionsService {
     // ===== BƯỚC SỬA LỖI - THÊM VÀO ĐÂY =====
     // Quy tắc: Ngăn chặn người dùng tự thay đổi quyền của chính mình.
     if (targetUserId.equals(granterId)) {
-      throw new ForbiddenException('Bạn không thể tự thay đổi quyền của chính mình.');
+      throw new BusinessException(
+        ErrorCode.ACCESS_DENIED,
+        ErrorMessages.CANNOT_CHANGE_OWN_PERMISSION,
+        403,
+      );
     }
 
     // --- 1. KIỂM TRA QUYỀN CỦA NGƯỜI ĐI CẤP QUYỀN ---
     // Chỉ Owner hoặc Root Admin mới có quyền cấp quyền cho người khác
     const isOwner = await this.checkUserPermissionForNode(
-        granter,
-        targetNodeId,
-        PermissionLevel.OWNER,
+      granter,
+      targetNodeId,
+      PermissionLevel.OWNER,
     );
     if (!isOwner) {
-      // checkUserPermissionForNode đã xử lý cho Root Admin
-      throw new ForbiddenException('Chỉ chủ sở hữu mới có quyền cấp quyền cho mục này.');
+      throw new BusinessException(ErrorCode.ACCESS_DENIED, ErrorMessages.ONLY_OWNER_CAN_GRANT, 403);
     }
 
     // --- 2. KIỂM TRA XEM PERMISSION ĐÃ TỒN TẠI CHƯA ---
@@ -131,7 +131,11 @@ export class PermissionsService {
     // Nếu người bị tác động đã là Owner, chỉ có RootAdmin mới được phép thay đổi
     if (existingPermission && existingPermission.permission === PermissionLevel.OWNER) {
       if (granter.role !== UserRole.ROOT_ADMIN) {
-        throw new ForbiddenException('Bạn không có quyền thay đổi quyền của một Owner khác.');
+        throw new BusinessException(
+          ErrorCode.ACCESS_DENIED,
+          ErrorMessages.CANNOT_CHANGE_OTHER_OWNER,
+          403,
+        );
       }
     }
 
@@ -200,18 +204,26 @@ export class PermissionsService {
       where: { _id: permissionObjectId },
     });
     if (!permissionToRevoke) {
-      throw new NotFoundException('Quyền này không tồn tại.');
+      throw new BusinessException(
+        ErrorCode.PERMISSION_NOT_FOUND,
+        ErrorMessages.PERMISSION_NOT_FOUND,
+        404,
+      );
     }
 
     // --- 2. KIỂM TRA QUYỀN CỦA NGƯỜI ĐI THU HỒI ---
     // Chỉ Owner của Node đó (hoặc RootAdmin) mới có quyền thu hồi quyền của người khác
     const canRevoke = await this.checkUserPermissionForNode(
-        revoker,
-        permissionToRevoke.nodeId,
-        PermissionLevel.OWNER,
+      revoker,
+      permissionToRevoke.nodeId,
+      PermissionLevel.OWNER,
     );
     if (!canRevoke) {
-      throw new ForbiddenException('Chỉ chủ sở hữu mới có quyền thu hồi quyền trên mục này.');
+      throw new BusinessException(
+        ErrorCode.ACCESS_DENIED,
+        ErrorMessages.ONLY_OWNER_CAN_REVOKE,
+        403,
+      );
     }
 
     if (permissionToRevoke.permission === PermissionLevel.OWNER) {
@@ -220,7 +232,11 @@ export class PermissionsService {
         // Cho phép Owner tự thu hồi quyền của chính mình (nhưng sẽ bị chặn bởi logic Owner cuối cùng ở dưới)
         // Nhưng không cho phép thu hồi quyền của Owner khác.
         if (!permissionToRevoke.userId.equals(revoker._id)) {
-          throw new ForbiddenException('Bạn không có quyền thu hồi quyền của một Owner khác.');
+          throw new BusinessException(
+            ErrorCode.ACCESS_DENIED,
+            ErrorMessages.CANNOT_REVOKE_OTHER_OWNER,
+            403,
+          );
         }
       }
     }
@@ -238,8 +254,10 @@ export class PermissionsService {
 
       // Nếu không còn owner nào khác, không cho phép xóa owner cuối cùng
       if (otherOwnersCount === 0) {
-        throw new ForbiddenException(
-            'Không thể xóa chủ sở hữu cuối cùng của mục này. Hãy chuyển quyền sở hữu cho người khác trước.',
+        throw new BusinessException(
+          ErrorCode.ACCESS_DENIED,
+          ErrorMessages.CANNOT_DELETE_LAST_OWNER,
+          403,
         );
       }
     }
@@ -280,9 +298,9 @@ export class PermissionsService {
    * CẤP QUYỀN OWNER HÀNG LOẠT CHO NHIỀU USER
    */
   async grantOwnerPermissionToUsers(
-      userIds: ObjectId[],
-      nodeId: ObjectId,
-      granterId: ObjectId,
+    userIds: ObjectId[],
+    nodeId: ObjectId,
+    granterId: ObjectId,
   ): Promise<void> {
     const newPermissions: Partial<Permission>[] = userIds.map((userId: ObjectId) => ({
       userId: userId,
@@ -311,10 +329,10 @@ export class PermissionsService {
   }
 
   async grantRecursive(
-      parentNodeId: ObjectId,
-      targetUserId: ObjectId,
-      permission: PermissionLevel,
-      granterId: ObjectId,
+    parentNodeId: ObjectId,
+    targetUserId: ObjectId,
+    permission: PermissionLevel,
+    granterId: ObjectId,
   ): Promise<void> {
     // 1. Tìm tất cả các node con cháu
     const descendantNodes = await this.nodesService.findAllDescendants(parentNodeId);

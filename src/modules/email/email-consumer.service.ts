@@ -79,14 +79,14 @@ export class EmailConsumerService {
       <p>Xin chào,</p>
       <p>Yêu cầu truy cập của bạn cho mục <b>${nodeName}</b> đã được <b>${isApproved ? 'PHÊ DUYỆT' : 'TỪ CHỐI'}</b>.</p>
       ${
-        isApproved ?
-          `<p>Bây giờ bạn có thể truy cập vào tài nguyên này.</p>
+        isApproved
+          ? `<p>Bây giờ bạn có thể truy cập vào tài nguyên này.</p>
       <br/>
       <a href="${loginUrl}" style="background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
         Truy cập ngay
-      </a>` :
-          ''
-}
+      </a>`
+          : ''
+      }
       <br/>
       <p>Trân trọng,<br/>Hệ thống Quản lý Tài liệu</p>
     `;

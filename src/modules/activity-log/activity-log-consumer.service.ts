@@ -19,7 +19,7 @@ export class ActivityLogConsumerService {
       const logEntry = this.activityLogRepository.create(job.data);
       await this.activityLogRepository.save(logEntry);
       console.log(
-          `[Activity Log Worker] Một Activity mới đã được thêm vào kho hẹ hẹ: ${job.data.action}`,
+        `[Activity Log Worker] Một Activity mới đã được thêm vào kho hẹ hẹ: ${job.data.action}`,
       );
     } catch (error) {
       console.error(`[Activity Log Worker] Lỗi khi ghi log:`, error);

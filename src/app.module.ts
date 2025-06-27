@@ -48,7 +48,6 @@ import { ActivityLogModule } from './modules/activity-log/activity-log.module';
       inject: [ConfigService],
       useFactory: bullConfig,
     }),
-    // Thêm các module của bạn vào đây (sau khi đã tạo)
     UsersModule,
     AuthModule,
     NodesModule,

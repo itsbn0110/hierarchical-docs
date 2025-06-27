@@ -4,9 +4,12 @@ import { UserResponseDto } from './user-response.dto';
 
 export class LoginResponseDto {
   @ApiProperty()
-    access_token: string;
+  access_token: string;
+
+  @ApiProperty()
+  refreshToken: string;
 
   @ApiProperty({ type: UserResponseDto })
   @Type(() => UserResponseDto)
-    user: UserResponseDto;
+  user: UserResponseDto;
 }
