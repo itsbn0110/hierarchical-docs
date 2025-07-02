@@ -17,6 +17,9 @@ export class TreeNodeDto {
   type: NodeType;
 
   @Expose()
+  content: string | null;
+
+  @Expose()
   level: number;
 
   @Expose()

@@ -44,7 +44,11 @@ export class RolesGuard implements CanActivate {
     const hasRequiredRole = requiredRoles.some((role) => user.role == role);
 
     if (!hasRequiredRole) {
-      throw new ForbiddenException('Bạn không có quyền truy cập');
+      throw new BusinessException(
+        ErrorCode.ACCESS_DENIED,
+        ErrorMessages.ACCESS_DENIED,
+        HttpStatus.FORBIDDEN,
+      );
     }
 
     return true;

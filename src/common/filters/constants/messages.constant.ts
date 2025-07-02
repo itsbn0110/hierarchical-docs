@@ -33,7 +33,8 @@ export const ErrorMessages = {
   ONLY_OWNER_CAN_REVOKE: 'Chỉ chủ sở hữu mới có quyền thu hồi quyền trên mục này.',
   CANNOT_REVOKE_OTHER_OWNER: 'Bạn không có quyền thu hồi quyền của một Owner khác.',
   // eslint-disable-next-line max-len
-  CANNOT_DELETE_LAST_OWNER: 'Không thể xóa chủ sở hữu cuối cùng của mục này. Hãy chuyển quyền sở hữu cho người khác trước.',
+  CANNOT_DELETE_LAST_OWNER:
+    'Không thể xóa chủ sở hữu cuối cùng của mục này. Hãy chuyển quyền sở hữu cho người khác trước.',
 
   // Document related
   DOCUMENT_NOT_FOUND: 'Không tìm thấy tài liệu',
@@ -51,6 +52,8 @@ export const ErrorMessages = {
   INTERNAL_SERVER_ERROR: 'Đã xảy ra lỗi hệ thống',
   BAD_REQUEST: 'Yêu cầu không hợp lệ',
   VALIDATION_ERROR: 'Lỗi xác thực dữ liệu',
+  ROOTADMIN_ISNOT_DEFINED:
+    'ROOT_ADMIN_EMAIL, ROOT_ADMIN_USERNAME, hoặc ROOT_ADMIN_PASSWORD không được định nghĩa trong biến môi trường',
 } as const;
 
 export const SuccessMessages = {

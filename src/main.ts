@@ -10,12 +10,19 @@ import { PasswordPolicyGuard } from './modules/auth/guards/password-policy.guard
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.enableCors({
+    origin: ['http://localhost:5173'],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
+
   app.use(helmet());
 
   app.use(
     rateLimit({
       windowMs: 15 * 60 * 1000,
-      max: 100,
+      max: 10000,
       message: 'Too many requests from this IP, please try again later.',
     }),
   );

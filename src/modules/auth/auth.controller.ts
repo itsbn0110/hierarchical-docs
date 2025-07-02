@@ -47,7 +47,7 @@ export class AuthController {
   ): Promise<LoginResponseDto> {
     const tokenInfo = await this.authService.login(req.user);
     const response: LoginResponseDto = {
-      access_token: tokenInfo.accessToken,
+      accessToken: tokenInfo.accessToken,
       refreshToken: tokenInfo.refreshToken,
       user: req.user,
     };

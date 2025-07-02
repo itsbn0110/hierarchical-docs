@@ -4,7 +4,7 @@ import { UserResponseDto } from './user-response.dto';
 
 export class LoginResponseDto {
   @ApiProperty()
-  access_token: string;
+  accessToken: string;
 
   @ApiProperty()
   refreshToken: string;

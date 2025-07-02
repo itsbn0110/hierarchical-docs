@@ -40,7 +40,11 @@ export class AdminInitService implements OnModuleInit {
       }
 
       if (!password) {
-        throw new Error('ROOT_ADMIN_PASSWORD is not defined in environment variables');
+        throw new BusinessException(
+          ErrorCode.BAD_REQUEST,
+          ErrorMessages.ROOTADMIN_ISNOT_DEFINED,
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
       const hashPassword = await bcrypt.hash(password, 10);

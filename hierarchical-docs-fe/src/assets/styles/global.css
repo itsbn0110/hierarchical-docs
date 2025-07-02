@@ -1,6 +1,0 @@
-/* Global styles, reset, and Ant Design overrides if needed */
-@import 'reset-css';
-body {
-  font-family: 'Roboto', Arial, sans-serif;
-  background: #f5f6fa;
-}

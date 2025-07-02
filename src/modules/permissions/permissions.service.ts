@@ -30,6 +30,25 @@ export class PermissionsService {
     @Inject(forwardRef(() => ActivityLogProducerService))
     private readonly activityLogProducer: ActivityLogProducerService,
   ) {}
+
+  async getUserPermissionForNode(
+    userId: ObjectId,
+    nodeObjectId: ObjectId,
+  ): Promise<Permission | null> {
+    // Tìm permission của user trên node cụ thể
+    const permission = await this.permissionRepository.findOne({
+      where: { userId, nodeId: nodeObjectId },
+    });
+
+    // Nếu không tìm thấy, trả về null
+    if (!permission) {
+      return null;
+    }
+
+    // Trả về permission nếu tìm thấy
+    return permission;
+  }
+
   /**
    * KIỂM TRA QUYỀN CỦA USER TRÊN MỘT NODE
    * Đây là hàm bạn đang bị thiếu.

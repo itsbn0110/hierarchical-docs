@@ -23,7 +23,7 @@ export class UsersController {
   @ApiResponse({
     status: 200,
     description: 'Tạo người dùng thành công',
-    type: LoginResponseDto, // Nếu muốn mô tả response cụ thể hơn
+    type: LoginResponseDto,
   })
   @Roles(UserRole.ROOT_ADMIN)
   @Post()

@@ -10,6 +10,12 @@ export enum ErrorCode {
   ACCOUNT_DISABLED = 'E1008',
   ACCESS_DENIED = 'E1009',
 
+  // Node related
+  NODE_NOT_FOUND = 'E4001',
+  NODE_FORBIDDEN = 'E4002',
+  NODE_INVALID_TYPE = 'E4003',
+  NODE_CANNOT_MOVE = 'E4004',
+
   // Request related
   REQUEST_NOT_FOUND = 'E2001',
   REQUEST_ALREADY_PROCESSED = 'E2002',
