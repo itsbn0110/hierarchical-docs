@@ -29,6 +29,7 @@ import { MoveNodeDto } from './dto/move-node.dto';
 import { BusinessException } from 'src/common/filters/business.exception';
 import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
 import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
+import { UsersService } from '../users/users.service';
 
 type Ancestor = {
   _id: ObjectId;
@@ -47,6 +48,9 @@ export class NodesService {
     @Inject(forwardRef(() => ActivityLogProducerService))
     private readonly activityLogProducer: ActivityLogProducerService,
 
+
+    @Inject(forwardRef(() => UsersService))
+    private readonly usersService: UsersService,
     @InjectConnection() private readonly connection: Connection,
   ) {}
 
@@ -128,6 +132,7 @@ export class NodesService {
 
   async getTreeForUser(parentId: string | null, user: User): Promise<TreeNodeDto[]> {
     // ... (Giữ nguyên logic của hàm này)
+    console.log("helllooooo");
     const parentObjectId = parentId ? new ObjectId(parentId) : null;
     let nodes: Node[]; // --- BƯỚC 1: KIỂM TRA QUYỀN TRUY CẬP VÀO THƯ MỤC CHA ---
     // (Bỏ qua nếu là Root Admin hoặc đang xem ở cấp gốc)
@@ -173,8 +178,12 @@ export class NodesService {
     const permissionMap = new Map<string, PermissionLevel>();
     permissions.forEach((p) => permissionMap.set(p.nodeId.toHexString(), p.permission)); // --- 3. Chuyển đổi sang DTO để trả về ---
 
-    const treeDtos = nodes.map((node) => {
+
+    const treeDtos = nodes.map(async (node) => {
       const nodeIdString = node._id.toHexString();
+      const createdByUser = await this.usersService.findUserById(node.createdBy.toHexString());
+
+      
       return plainToInstance(TreeNodeDto, {
         // Dùng plainToInstance để áp dụng decorator của DTO
         id: node._id,
@@ -183,10 +192,11 @@ export class NodesService {
         level: node.level,
         hasChildren: parentIdsWithChildren.has(nodeIdString),
         userPermission: permissionMap.get(nodeIdString) || null,
+        createdBy: createdByUser.username
       });
     });
 
-    return treeDtos;
+    return await Promise.all(treeDtos);
   }
 
   /**

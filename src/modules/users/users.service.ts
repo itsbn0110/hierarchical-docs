@@ -77,7 +77,7 @@ export class UsersService {
     return this.userRepository.find();
   }
 
-  findById(id: string) {
+  async findById(id: string) {
     return this.userRepository.findOne({ where: { _id: new ObjectId(id) } });
   }
 

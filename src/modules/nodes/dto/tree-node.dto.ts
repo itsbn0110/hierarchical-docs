@@ -27,4 +27,7 @@ export class TreeNodeDto {
 
   @Expose()
   userPermission: PermissionLevel | null;
+
+  @Expose()
+  createdBy: string;
 }
