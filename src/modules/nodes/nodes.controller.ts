@@ -7,6 +7,7 @@ import { TreeNodeDto } from './dto/tree-node.dto';
 import { UpdateNodeNameDto } from './dto/update-node-name.dto';
 import { UpdateNodeContentDto } from './dto/update-node-content.dto';
 import { MoveNodeDto } from './dto/move-node.dto';
+import { NodeDetailsDto } from './dto/node-details-dto';
 
 @Controller('nodes')
 @ApiBearerAuth()
@@ -32,7 +33,7 @@ export class NodesController {
     summary: 'Lấy thông tin chi tiết của một node (dùng cho breadcrumb và xem file)',
   })
   @ApiResponse({ status: 200, description: 'Thông tin chi tiết của node.', type: Node })
-  getNodeDetails(@Param('id') id: string, @Req() req): Promise<Node> {
+  getNodeDetails(@Param('id') id: string, @Req() req): Promise<NodeDetailsDto> {
     // Gọi hàm service mới và trả về toàn bộ entity Node
     return this.nodesService.getNodeDetails(id, req.user);
   }

@@ -7,10 +7,11 @@ import { NodesModule } from '../nodes/nodes.module';
 import { EmailModule } from '../email/email.module';
 import { UsersModule } from '../users/users.module';
 import { ActivityLogModule } from '../activity-log/activity-log.module';
+import { ActivityLog } from '../activity-log/entities/activity-log.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Permission]),
+    TypeOrmModule.forFeature([Permission, ActivityLog]),
     forwardRef(() => NodesModule),
     forwardRef(() => EmailModule),
     forwardRef(() => UsersModule),

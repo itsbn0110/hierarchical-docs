@@ -30,6 +30,7 @@ import { BusinessException } from 'src/common/filters/business.exception';
 import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
 import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
 import { UsersService } from '../users/users.service';
+import { NodeDetailsDto } from './dto/node-details-dto';
 
 type Ancestor = {
   _id: ObjectId;
@@ -47,7 +48,6 @@ export class NodesService {
 
     @Inject(forwardRef(() => ActivityLogProducerService))
     private readonly activityLogProducer: ActivityLogProducerService,
-
 
     @Inject(forwardRef(() => UsersService))
     private readonly usersService: UsersService,
@@ -132,7 +132,6 @@ export class NodesService {
 
   async getTreeForUser(parentId: string | null, user: User): Promise<TreeNodeDto[]> {
     // ... (Giữ nguyên logic của hàm này)
-    console.log("helllooooo");
     const parentObjectId = parentId ? new ObjectId(parentId) : null;
     let nodes: Node[]; // --- BƯỚC 1: KIỂM TRA QUYỀN TRUY CẬP VÀO THƯ MỤC CHA ---
     // (Bỏ qua nếu là Root Admin hoặc đang xem ở cấp gốc)
@@ -178,12 +177,10 @@ export class NodesService {
     const permissionMap = new Map<string, PermissionLevel>();
     permissions.forEach((p) => permissionMap.set(p.nodeId.toHexString(), p.permission)); // --- 3. Chuyển đổi sang DTO để trả về ---
 
-
     const treeDtos = nodes.map(async (node) => {
       const nodeIdString = node._id.toHexString();
       const createdByUser = await this.usersService.findUserById(node.createdBy.toHexString());
 
-      
       return plainToInstance(TreeNodeDto, {
         // Dùng plainToInstance để áp dụng decorator của DTO
         id: node._id,
@@ -192,7 +189,7 @@ export class NodesService {
         level: node.level,
         hasChildren: parentIdsWithChildren.has(nodeIdString),
         userPermission: permissionMap.get(nodeIdString) || null,
-        createdBy: createdByUser.username
+        createdBy: createdByUser.username,
       });
     });
 
@@ -206,17 +203,10 @@ export class NodesService {
    * @param user User đang thực hiện yêu cầu
    * @returns Toàn bộ entity Node
    */
-  async getNodeDetails(nodeId: string, user: User): Promise<Node> {
+  async getNodeDetails(nodeId: string, user: User): Promise<NodeDetailsDto> {
     const nodeObjectId = new ObjectId(nodeId);
 
-    // 1. Tìm node trong DB
-    const node = await this.nodesRepository.findOne({ where: { _id: nodeObjectId } });
-    if (!node) {
-      throw new BusinessException(ErrorCode.NODE_NOT_FOUND, ErrorMessages.DOCUMENT_NOT_FOUND, 404);
-    }
-
-    // 2. Kiểm tra quyền xem (VIEWER) của user trên node này
-    // Bỏ qua kiểm tra nếu là Root Admin
+    // 1. Kiểm tra quyền xem (VIEWER) của user trên node này
     if (user.role !== UserRole.ROOT_ADMIN) {
       const canView = await this.permissionsService.checkUserPermissionForNode(
         user,
@@ -232,11 +222,29 @@ export class NodesService {
       }
     }
 
-    // 3. Trả về toàn bộ entity Node
-    // Frontend sẽ tự quyết định dùng `ancestors` cho breadcrumb và `content` cho file view.
-    return node;
-  }
+    // 2. Lấy thông tin node gốc từ DB
+    const node = await this.nodesRepository.findOne({ where: { _id: nodeObjectId } });
+    console.log(node);
+    if (!node) {
+      throw new BusinessException(ErrorCode.NODE_NOT_FOUND, ErrorMessages.DOCUMENT_NOT_FOUND, 404);
+    }
 
+    // 3. Lấy thông tin người tạo từ UsersService
+    const creator = await this.usersService.findById(node.createdBy.toHexString());
+
+    // 4. Kết hợp dữ liệu và chuyển đổi sang DTO
+    // Dùng plainToInstance để đảm bảo chỉ các trường có @Expose() trong DTO mới được trả về
+    return plainToInstance(
+      NodeDetailsDto,
+      {
+        ...node, // Lấy tất cả các thuộc tính của node gốc
+        createdBy: creator ? creator.username : 'N/A', // Ghi đè `createdBy` bằng username
+      },
+      {
+        excludeExtraneousValues: true, // Rất quan trọng: loại bỏ các trường không được Expose
+      },
+    );
+  }
   // ... (Các hàm updateName, updateContent, delete, move giữ nguyên)
   async updateName(nodeId: string, dto: UpdateNodeNameDto, user: User): Promise<Node> {
     const nodeObjectId = new ObjectId(nodeId);

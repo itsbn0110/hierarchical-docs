@@ -15,12 +15,15 @@ import { ActivityLogProducerService } from '../activity-log/activity-log-produce
 import { BusinessException } from 'src/common/filters/business.exception';
 import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
 import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
+import { ActivityLog } from '../activity-log/entities/activity-log.entity';
 @Injectable()
 export class PermissionsService {
   constructor(
     private readonly configService: ConfigService,
     @InjectRepository(Permission)
     private readonly permissionRepository: MongoRepository<Permission>,
+    @InjectRepository(ActivityLog)
+    private readonly activityLogRepository: MongoRepository<ActivityLog>,
     @Inject(forwardRef(() => NodesService))
     private readonly nodesService: NodesService,
     @Inject(forwardRef(() => EmailProducerService))
@@ -30,6 +33,88 @@ export class PermissionsService {
     @Inject(forwardRef(() => ActivityLogProducerService))
     private readonly activityLogProducer: ActivityLogProducerService,
   ) {}
+
+  async getPermissionsForNode(nodeId: string): Promise<any[]> {
+    const nodeObjectId = new ObjectId(nodeId);
+
+    // Sử dụng Aggregation Pipeline của MongoDB để join với collection 'users'
+    return this.permissionRepository
+      .aggregate([
+        {
+          // Bước 1: Tìm tất cả các bản ghi quyền khớp với nodeId
+          $match: { nodeId: nodeObjectId },
+        },
+        {
+          // Bước 2: Join với collection 'users'
+          $lookup: {
+            from: 'users', // Tên collection cần join
+            localField: 'userId', // Trường trong collection 'permissions'
+            foreignField: '_id', // Trường trong collection 'users'
+            as: 'userDetails', // Tên của mảng mới chứa kết quả join
+          },
+        },
+        {
+          // Bước 3: "Mở" mảng userDetails (vì mỗi quyền chỉ có 1 user)
+          $unwind: '$userDetails',
+        },
+        {
+          // Bước 4: Định hình lại dữ liệu trả về cho gọn gàng
+          $project: {
+            _id: 1, // Giữ lại ID của bản ghi permission
+            permission: 1,
+            user: {
+              _id: '$userDetails._id',
+              username: '$userDetails.username',
+              email: '$userDetails.email',
+            },
+          },
+        },
+      ])
+      .toArray();
+  }
+
+  // --- [MỚI] HÀM ĐỂ LẤY LỊCH SỬ HOẠT ĐỘNG CHO MỘT NODE ---
+  async getActivityForNode(nodeId: string): Promise<any[]> {
+    const nodeObjectId = new ObjectId(nodeId);
+    return this.activityLogRepository
+      .aggregate([
+        {
+          // Bước 1: Tìm tất cả log có targetId khớp
+          $match: { targetId: nodeObjectId },
+        },
+        {
+          // Bước 2: Sắp xếp theo thời gian mới nhất lên đầu
+          $sort: { timestamp: -1 },
+        },
+        {
+          // Bước 3: Join với collection 'users' để lấy tên người thực hiện
+          $lookup: {
+            from: 'users',
+            localField: 'userId',
+            foreignField: '_id',
+            as: 'userDetails',
+          },
+        },
+        {
+          // Bước 4: Mở mảng userDetails
+          $unwind: '$userDetails',
+        },
+        {
+          // Bước 5: Định hình lại dữ liệu trả về
+          $project: {
+            _id: 1,
+            action: 1,
+            details: 1,
+            timestamp: 1,
+            user: {
+              _id: '$userDetails._id',
+              username: '$userDetails.username',
+            },
+          },
+        },
+      ])
+      .toArray();
+  }
 
   async getUserPermissionForNode(
     userId: ObjectId,

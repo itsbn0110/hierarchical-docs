@@ -1,8 +1,7 @@
+import { transformObjectId } from 'src/common/helpers/transform.helpers';
+import { NodeType, PermissionLevel } from 'src/common/enums/projects.enum';
 import { Exclude, Expose, Transform } from 'class-transformer';
 import { ObjectId } from 'mongodb';
-import { NodeType, PermissionLevel } from 'src/common/enums/projects.enum';
-
-const transformObjectId = ({ value }) => (value instanceof ObjectId ? value.toHexString() : value);
 
 @Exclude()
 export class TreeNodeDto {
