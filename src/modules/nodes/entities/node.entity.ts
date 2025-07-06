@@ -7,7 +7,6 @@ import { exposeBasedOnNodeType, transformObjectId } from 'src/common/helpers/tra
 
 export class Ancestor {
   @Transform(transformObjectId)
-  @ObjectIdColumn()
   @Expose()
   _id: ObjectId;
 

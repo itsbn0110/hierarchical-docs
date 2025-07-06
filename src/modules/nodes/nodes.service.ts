@@ -224,7 +224,7 @@ export class NodesService {
 
     // 2. Lấy thông tin node gốc từ DB
     const node = await this.nodesRepository.findOne({ where: { _id: nodeObjectId } });
-    console.log(node);
+   
     if (!node) {
       throw new BusinessException(ErrorCode.NODE_NOT_FOUND, ErrorMessages.DOCUMENT_NOT_FOUND, 404);
     }
@@ -232,18 +232,25 @@ export class NodesService {
     // 3. Lấy thông tin người tạo từ UsersService
     const creator = await this.usersService.findById(node.createdBy.toHexString());
 
-    // 4. Kết hợp dữ liệu và chuyển đổi sang DTO
+    //4. Lấy quyền của người dùng hiện tại trên node này
+    const currentUserPermission = await this.permissionsService.getUserPermissionForNode(
+      user._id,
+      nodeObjectId,
+    );
+
+    // 5. Kết hợp dữ liệu và chuyển đổi sang DTO
     // Dùng plainToInstance để đảm bảo chỉ các trường có @Expose() trong DTO mới được trả về
-    return plainToInstance(
+    const nodeDetailData = plainToInstance(
       NodeDetailsDto,
       {
         ...node, // Lấy tất cả các thuộc tính của node gốc
         createdBy: creator ? creator.username : 'N/A', // Ghi đè `createdBy` bằng username
+        userPermission: currentUserPermission ?  currentUserPermission.permission : null
       },
-      {
-        excludeExtraneousValues: true, // Rất quan trọng: loại bỏ các trường không được Expose
-      },
+     
     );
+
+    return nodeDetailData
   }
   // ... (Các hàm updateName, updateContent, delete, move giữ nguyên)
   async updateName(nodeId: string, dto: UpdateNodeNameDto, user: User): Promise<Node> {

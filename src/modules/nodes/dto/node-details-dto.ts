@@ -1,11 +1,55 @@
-import { Expose } from 'class-transformer';
-import { Node } from '../entities/node.entity';
-import { OmitType } from '@nestjs/mapped-types'; // Hoặc from '@nestjs/swagger'
+import { Exclude, Expose, Transform, Type } from 'class-transformer';
+import { ObjectId } from 'mongodb';
+import { transformObjectId } from 'src/common/helpers/transform.helpers';
+import { NodeType, PermissionLevel } from 'src/common/enums/projects.enum';
 
-// Sử dụng OmitType để tạo một class mới kế thừa từ Node nhưng loại bỏ trường 'createdBy' gốc.
-// Điều này cho phép chúng ta định nghĩa lại trường 'createdBy' với một kiểu dữ liệu mới.
-export class NodeDetailsDto extends OmitType(Node, ['createdBy'] as const) {
-  // Ghi đè kiểu dữ liệu của createdBy thành string.
+// Định nghĩa lại class Ancestor để đảm bảo an toàn
+class AncestorDto {
+  @Expose()
+  @Transform(transformObjectId)
+  _id: ObjectId;
+
+  @Expose()
+  name: string;
+}
+
+// [SỬA] Định nghĩa NodeDetailsDto như một class độc lập, không kế thừa
+@Exclude()
+export class NodeDetailsDto {
+  @Transform(transformObjectId)
+  @Expose()
+  _id: ObjectId;
+
+  @Expose()
+  name: string;
+
+  @Expose()
+  type: NodeType;
+
+  @Expose()
+  content?: string;
+
+  @Expose()
+  @Transform(transformObjectId)
+  parentId: ObjectId | null;
+
+  @Expose()
+  @Type(() => AncestorDto)
+  ancestors: AncestorDto[];
+
+  @Expose()
+  level: number;
+
+  // Trường createdBy giờ sẽ là string
   @Expose()
   createdBy: string;
+
+  @Expose()
+  userPermission: PermissionLevel | null;
+
+  @Expose()
+  createdAt: Date;
+
+  @Expose()
+  updatedAt: Date;
 }
