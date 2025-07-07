@@ -224,7 +224,7 @@ export class NodesService {
 
     // 2. Lấy thông tin node gốc từ DB
     const node = await this.nodesRepository.findOne({ where: { _id: nodeObjectId } });
-   
+
     if (!node) {
       throw new BusinessException(ErrorCode.NODE_NOT_FOUND, ErrorMessages.DOCUMENT_NOT_FOUND, 404);
     }
@@ -240,17 +240,13 @@ export class NodesService {
 
     // 5. Kết hợp dữ liệu và chuyển đổi sang DTO
     // Dùng plainToInstance để đảm bảo chỉ các trường có @Expose() trong DTO mới được trả về
-    const nodeDetailData = plainToInstance(
-      NodeDetailsDto,
-      {
-        ...node, // Lấy tất cả các thuộc tính của node gốc
-        createdBy: creator ? creator.username : 'N/A', // Ghi đè `createdBy` bằng username
-        userPermission: currentUserPermission ?  currentUserPermission.permission : null
-      },
-     
-    );
+    const nodeDetailData = plainToInstance(NodeDetailsDto, {
+      ...node, // Lấy tất cả các thuộc tính của node gốc
+      createdBy: creator ? creator.username : 'N/A', // Ghi đè `createdBy` bằng username
+      userPermission: currentUserPermission ? currentUserPermission.permission : null,
+    });
 
-    return nodeDetailData
+    return nodeDetailData;
   }
   // ... (Các hàm updateName, updateContent, delete, move giữ nguyên)
   async updateName(nodeId: string, dto: UpdateNodeNameDto, user: User): Promise<Node> {
@@ -540,10 +536,14 @@ export class NodesService {
     return this.nodesRepository.findOne({ where: { _id: new ObjectId(nodeId) } });
   }
 
-  async findAllDescendants(parentNodeId: ObjectId): Promise<Node[]> {
-    // Dùng pattern Array of Ancestors để tìm hiệu quả
+  async findAllDescendants(parentNodeId: string | ObjectId): Promise<Node[]> {
+    // Bước 1: Chuyển đổi an toàn parentNodeId sang kiểu ObjectId
+    // Dù đầu vào là string hay ObjectId, đầu ra luôn là ObjectId.
+    const parentObjectId = new ObjectId(parentNodeId);
+
+    // Bước 2: Thực hiện truy vấn với kiểu dữ liệu đã được đảm bảo
     return this.nodesRepository.find({
-      where: { 'ancestors._id': parentNodeId },
+      where: { 'ancestors._id': parentObjectId },
     });
   }
 }

@@ -1,8 +1,9 @@
 import { Controller, Post, Body, Request, Get, Param } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AccessRequestsService } from './access-requests.service';
 import { CreateAccessRequestDto } from './dto/create-access-request.dto';
 import { AccessRequest } from './entities/access-request.entity';
+import { PendingRequestDto } from './dto/access-request-response.dto';
 
 @ApiTags('Access Requests')
 @ApiBearerAuth()
@@ -20,14 +21,16 @@ export class AccessRequestsController {
   }
 
   @Get('pending')
-  @ApiOperation({ summary: 'Lấy danh sách các yêu cầu đang chờ xử lý cho Owner' })
-  findPendingRequests(@Request() req) {
+  @ApiOperation({ summary: 'Lấy các yêu cầu đang chờ xử lý cho người dùng hiện tại' })
+  @ApiResponse({ status: 200, type: [PendingRequestDto] })
+  findPending(@Request() req) {
     return this.accessRequestsService.findPendingRequestsForOwner(req.user);
   }
 
   @Post(':id/approve')
   @ApiOperation({ summary: 'Phê duyệt một yêu cầu truy cập' })
   approveRequest(@Param('id') id: string, @Request() req) {
+    console.log('Approving request with ID:', id);
     return this.accessRequestsService.approve(id, req.user);
   }
 

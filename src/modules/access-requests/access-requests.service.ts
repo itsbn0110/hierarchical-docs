@@ -1,8 +1,4 @@
-import {
-  forwardRef,
-  Inject,
-  Injectable,
-} from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { AccessRequest } from './entities/access-request.entity';
 import { User } from '../users/entities/user.entity';
 import { CreateAccessRequestDto } from './dto/create-access-request.dto';
@@ -11,7 +7,7 @@ import { NodesService } from '../nodes/nodes.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MongoRepository } from 'typeorm';
 import { ObjectId } from 'mongodb';
-import { PermissionLevel, RequestStatus } from 'src/common/enums/projects.enum';
+import { PermissionLevel, RequestStatus, UserRole } from 'src/common/enums/projects.enum';
 import { EmailProducerService } from '../email/email-producer.service';
 import { UsersService } from '../users/users.service';
 import { ConfigService } from '@nestjs/config';
@@ -19,6 +15,8 @@ import { TasksProducerService } from '../tasks/tasks-producer.service';
 import { BusinessException } from 'src/common/filters/business.exception';
 import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
 import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
+import { plainToInstance } from 'class-transformer';
+import { PendingRequestDto } from './dto/access-request-response.dto';
 @Injectable()
 export class AccessRequestsService {
   constructor(
@@ -46,22 +44,22 @@ export class AccessRequestsService {
     const node = await this.nodeService.findById(targetNodeId);
     if (!node) {
       throw new BusinessException(
-          ErrorCode.DOCUMENT_NOT_FOUND,
-          ErrorMessages.DOCUMENT_NOT_FOUND,
-          404,
+        ErrorCode.DOCUMENT_NOT_FOUND,
+        ErrorMessages.DOCUMENT_NOT_FOUND,
+        404,
       );
     }
     // 1b. Kiểm tra xem người dùng đã có quyền cao hơn hoặc bằng quyền đang xin chưa
     const hasSufficentPermission = await this.permissionService.checkUserPermissionForNode(
-        requester,
-        targetNodeId,
-        requestedPermission,
+      requester,
+      targetNodeId,
+      requestedPermission,
     );
     if (hasSufficentPermission) {
       throw new BusinessException(
-          ErrorCode.ACCESS_DENIED,
-          ErrorMessages.ALREADY_HAS_PERMISSION,
-          409,
+        ErrorCode.ACCESS_DENIED,
+        ErrorMessages.ALREADY_HAS_PERMISSION,
+        409,
       );
     }
     // 1c. Kiểm tra xem đã có một yêu cầu đang chờ xử lý (PENDING) từ user này cho node này chưa
@@ -74,9 +72,9 @@ export class AccessRequestsService {
     });
     if (existingPendingRequest) {
       throw new BusinessException(
-          ErrorCode.ACCESS_DENIED,
-          ErrorMessages.PENDING_REQUEST_EXISTS,
-          409,
+        ErrorCode.ACCESS_DENIED,
+        ErrorMessages.PENDING_REQUEST_EXISTS,
+        409,
       );
     }
 
@@ -115,25 +113,60 @@ export class AccessRequestsService {
   }
 
   /**
-   * Tìm tất cả các yêu cầu đang chờ xử lý mà một Owner có quyền xem xét.
+   * [SỬA LẠI] Tìm tất cả các yêu cầu đang chờ xử lý mà một Owner có quyền xem xét,
+   * và trả về dữ liệu đã được làm giàu.
    */
-  async findPendingRequestsForOwner(owner: User): Promise<AccessRequest[]> {
-    // 1. Tìm tất cả các quyền Owner của người dùng này
-    const ownerPermissions = await this.permissionService.findAllOwnedByUser(owner._id);
-    const ownedNodeIds = ownerPermissions.map((p) => p.nodeId);
+  async findPendingRequestsForOwner(owner: User): Promise<PendingRequestDto[]> {
+    let matchCondition: any = { status: RequestStatus.PENDING };
 
-    if (ownedNodeIds.length === 0) {
-      return []; // Nếu không sở hữu node nào, không có yêu cầu nào để xem
+    if (owner.role !== UserRole.ROOT_ADMIN) {
+      const ownerPermissions = await this.permissionService.findAllOwnedByUser(owner._id);
+      const ownedNodeIds = ownerPermissions.map((p) => p.nodeId);
+
+      if (ownedNodeIds.length === 0) {
+        return [];
+      }
+      matchCondition.nodeId = { $in: ownedNodeIds };
     }
 
-    // 2. Tìm tất cả các yêu cầu đang ở trạng thái PENDING trên các node mà họ sở hữu
-    return this.accessRequestRepository.find({
-      where: {
-        nodeId: { $in: ownedNodeIds },
-        status: RequestStatus.PENDING,
-      },
-      order: { createdAt: 'ASC' }, // Ưu tiên xử lý yêu cầu cũ trước
-    });
+    const pendingRequests = await this.accessRequestRepository
+      .aggregate([
+        { $match: matchCondition },
+        { $lookup: { from: 'nodes', localField: 'nodeId', foreignField: '_id', as: 'nodeInfo' } },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'requesterId',
+            foreignField: '_id',
+            as: 'requesterInfo',
+          },
+        },
+        { $unwind: '$nodeInfo' },
+        { $unwind: '$requesterInfo' },
+        {
+          // [SỬA] Bổ sung thêm isRecursive vào đây
+          $project: {
+            _id: 1,
+            requestedPermission: 1,
+            message: 1,
+            createdAt: 1,
+            isRecursive: 1, // Thêm trường này
+            node: {
+              _id: '$nodeInfo._id',
+              name: '$nodeInfo.name',
+              type: '$nodeInfo.type',
+            },
+            requester: {
+              _id: '$requesterInfo._id',
+              username: '$requesterInfo.username',
+            },
+          },
+        },
+        { $sort: { createdAt: -1 } },
+      ])
+      .toArray();
+
+    return plainToInstance(PendingRequestDto, pendingRequests);
   }
 
   async approve(requestId: string, reviewer: User): Promise<AccessRequest> {
@@ -151,12 +184,12 @@ export class AccessRequestsService {
     } else {
       // Cấp quyền cho một node duy nhất
       await this.permissionService.grant(
-          {
-            userId: request.requesterId.toHexString(),
-            nodeId: request.nodeId.toHexString(),
-            permission: request.requestedPermission,
-          },
-          reviewer,
+        {
+          userId: request.requesterId.toHexString(),
+          nodeId: request.nodeId.toHexString(),
+          permission: request.requestedPermission,
+        },
+        reviewer,
       );
     }
 

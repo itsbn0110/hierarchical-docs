@@ -433,20 +433,26 @@ export class PermissionsService {
   }
 
   async grantRecursive(
-    parentNodeId: ObjectId,
+    parentNodeId: string | ObjectId, // Cho phép đầu vào là string hoặc ObjectId
     targetUserId: ObjectId,
     permission: PermissionLevel,
     granterId: ObjectId,
   ): Promise<void> {
-    // 1. Tìm tất cả các node con cháu
-    const descendantNodes = await this.nodesService.findAllDescendants(parentNodeId);
-    const allNodeIds = [parentNodeId, ...descendantNodes.map((n) => n._id)];
+    // --- SỬA LỖI Ở ĐÂY ---
+    // Bước 1: Chuyển đổi ID của node cha thành ObjectId để đảm bảo kiểu dữ liệu
+    const parentObjectId = new ObjectId(parentNodeId);
+    const targetUserIdObjectId = new ObjectId(targetUserId);
+    // 2. Tìm tất cả các node con cháu
+    const descendantNodes = await this.nodesService.findAllDescendants(parentObjectId);
 
-    // 2. Dùng bulkWrite để cấp quyền hàng loạt một cách hiệu quả
-    // upsert: true sẽ tạo mới nếu chưa có, hoặc cập nhật quyền nếu đã có
+    // 3. Kết hợp node cha (đã là ObjectId) và các node con
+    const allNodeIds = [parentObjectId, ...descendantNodes.map((n) => n._id)];
+
+    console.log('allNodeIds:', allNodeIds);
+    // 4. Dùng bulkWrite để cấp quyền hàng loạt một cách hiệu quả
     const operations = allNodeIds.map((nodeId) => ({
       updateOne: {
-        filter: { userId: targetUserId, nodeId: nodeId },
+        filter: { userId: targetUserIdObjectId, nodeId: nodeId }, // Bây giờ tất cả nodeId đều là ObjectId
         update: {
           $set: {
             permission: permission,

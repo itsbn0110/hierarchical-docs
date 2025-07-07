@@ -27,6 +27,8 @@ export class TasksProducerService {
         delay: 5000, // 5s, 10s, 20s
       },
     });
+
+    console.log('check data', data);
     console.log(`Đã thêm job xử lý quyền đệ quy vào hàng đợi 'tasks'.`);
   }
 }
