@@ -16,6 +16,10 @@ import { BusinessException } from 'src/common/filters/business.exception';
 import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
 import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
 import { ActivityLog } from '../activity-log/entities/activity-log.entity';
+import { PermissionResponseDto } from './dto/permission.response.dto';
+import { plainToInstance } from 'class-transformer';
+import { ActivityLogResponseDto } from '../activity-log/dto/activity-log.response.dto';
+import { InvitePermissionDto } from './dto/invite-permission.dto';
 @Injectable()
 export class PermissionsService {
   constructor(
@@ -34,11 +38,11 @@ export class PermissionsService {
     private readonly activityLogProducer: ActivityLogProducerService,
   ) {}
 
-  async getPermissionsForNode(nodeId: string): Promise<any[]> {
+  async getPermissionsForNode(nodeId: string): Promise<PermissionResponseDto[]> {
     const nodeObjectId = new ObjectId(nodeId);
 
     // Sử dụng Aggregation Pipeline của MongoDB để join với collection 'users'
-    return this.permissionRepository
+    const results = await this.permissionRepository
       .aggregate([
         {
           // Bước 1: Tìm tất cả các bản ghi quyền khớp với nodeId
@@ -71,36 +75,38 @@ export class PermissionsService {
         },
       ])
       .toArray();
+    const transformedData = plainToInstance(PermissionResponseDto, results);
+    return transformedData;
   }
 
   // --- [MỚI] HÀM ĐỂ LẤY LỊCH SỬ HOẠT ĐỘNG CHO MỘT NODE ---
-  async getActivityForNode(nodeId: string): Promise<any[]> {
-    const nodeObjectId = new ObjectId(nodeId);
-    return this.activityLogRepository
+  async getActivityForNode(nodeId: string): Promise<ActivityLogResponseDto[]> {
+    // Không chuyển đổi nodeId thành ObjectId ở đây vì nó là string trong DB
+
+    const results = await this.activityLogRepository
       .aggregate([
+        // 1. $match: So sánh string với string
+        { $match: { targetId: nodeId } },
+        { $sort: { timestamp: -1 } },
         {
-          // Bước 1: Tìm tất cả log có targetId khớp
-          $match: { targetId: nodeObjectId },
+          // 2. $addFields: Thêm một trường tạm 'convertedUserId'
+          // bằng cách chuyển đổi trường 'userId' (string) sang ObjectId
+          $addFields: {
+            convertedUserId: { $toObjectId: '$userId' },
+          },
         },
         {
-          // Bước 2: Sắp xếp theo thời gian mới nhất lên đầu
-          $sort: { timestamp: -1 },
-        },
-        {
-          // Bước 3: Join với collection 'users' để lấy tên người thực hiện
+          // 3. $lookup: Join bằng trường ObjectId vừa được tạo
           $lookup: {
             from: 'users',
-            localField: 'userId',
+            localField: 'convertedUserId', // Dùng trường đã chuyển đổi
             foreignField: '_id',
             as: 'userDetails',
           },
         },
+        { $unwind: '$userDetails' },
         {
-          // Bước 4: Mở mảng userDetails
-          $unwind: '$userDetails',
-        },
-        {
-          // Bước 5: Định hình lại dữ liệu trả về
+          // 4. $project: Giữ nguyên, không cần thay đổi
           $project: {
             _id: 1,
             action: 1,
@@ -114,6 +120,40 @@ export class PermissionsService {
         },
       ])
       .toArray();
+
+    // Dùng plainToInstance để đảm bảo dữ liệu trả về được chuyển đổi đúng cách
+    return plainToInstance(ActivityLogResponseDto, results);
+  }
+
+  async inviteByEmail(
+    inviteDto: InvitePermissionDto,
+    granter: User,
+  ): Promise<PermissionResponseDto> {
+    const { email, nodeId, permission } = inviteDto;
+
+    const targetUser = await this.usersService.findByEmail(email);
+    if (!targetUser) {
+      throw new BusinessException(
+        ErrorCode.USER_NOT_FOUND,
+        `Người dùng với email '${email}' không tồn tại.`,
+        404,
+      );
+    }
+
+    // Tạo một GrantPermissionDto để tái sử dụng logic của hàm grant()
+    const grantDto: GrantPermissionDto = {
+      userId: targetUser._id.toHexString(),
+      nodeId,
+      permission,
+    };
+
+    // Gọi hàm grant hiện có và chuyển đổi kết quả trả về
+    const savedPermission = await this.grant(grantDto, granter);
+    // Trả về dữ liệu đã được định dạng để client có thể sử dụng ngay
+    return plainToInstance(PermissionResponseDto, {
+      ...savedPermission,
+      user: targetUser,
+    });
   }
 
   async getUserPermissionForNode(
@@ -218,13 +258,17 @@ export class PermissionsService {
 
     // --- 1. KIỂM TRA QUYỀN CỦA NGƯỜI ĐI CẤP QUYỀN ---
     // Chỉ Owner hoặc Root Admin mới có quyền cấp quyền cho người khác
-    const isOwner = await this.checkUserPermissionForNode(
+    const havePermission = await this.checkUserPermissionForNode(
       granter,
       targetNodeId,
-      PermissionLevel.OWNER,
+      PermissionLevel.EDITOR,
     );
-    if (!isOwner) {
-      throw new BusinessException(ErrorCode.ACCESS_DENIED, ErrorMessages.ONLY_OWNER_CAN_GRANT, 403);
+    if (!havePermission) {
+      throw new BusinessException(
+        ErrorCode.ACCESS_DENIED,
+        ErrorMessages.INSUFFICIENT_PERMISSIONS,
+        403,
+      );
     }
 
     // --- 2. KIỂM TRA XEM PERMISSION ĐÃ TỒN TẠI CHƯA ---
@@ -247,6 +291,7 @@ export class PermissionsService {
     if (existingPermission) {
       existingPermission.permission = permission;
       existingPermission.grantedBy = granterId;
+      existingPermission.grantedAt = new Date();
       return this.permissionRepository.save(existingPermission);
     } else {
       const newPermission = this.permissionRepository.create({
@@ -320,52 +365,33 @@ export class PermissionsService {
     const canRevoke = await this.checkUserPermissionForNode(
       revoker,
       permissionToRevoke.nodeId,
-      PermissionLevel.OWNER,
+      PermissionLevel.EDITOR,
     );
     if (!canRevoke) {
       throw new BusinessException(
         ErrorCode.ACCESS_DENIED,
-        ErrorMessages.ONLY_OWNER_CAN_REVOKE,
+        ErrorMessages.INSUFFICIENT_PERMISSIONS,
         403,
       );
     }
 
-    if (permissionToRevoke.permission === PermissionLevel.OWNER) {
-      // Nếu người thu hồi không phải RootAdmin, không cho phép
-      if (revoker.role !== UserRole.ROOT_ADMIN) {
-        // Cho phép Owner tự thu hồi quyền của chính mình (nhưng sẽ bị chặn bởi logic Owner cuối cùng ở dưới)
-        // Nhưng không cho phép thu hồi quyền của Owner khác.
-        if (!permissionToRevoke.userId.equals(revoker._id)) {
-          throw new BusinessException(
-            ErrorCode.ACCESS_DENIED,
-            ErrorMessages.CANNOT_REVOKE_OTHER_OWNER,
-            403,
-          );
-        }
-      }
-    }
-    // --- 3. (QUAN TRỌNG) KIỂM TRA ĐỂ TRÁNH 'MỒ CÔI' NODE ---
-    // Nếu quyền sắp bị thu hồi là quyền OWNER
-    if (permissionToRevoke.permission === PermissionLevel.OWNER) {
-      // Đếm xem node này còn lại bao nhiêu Owner khác
-      const otherOwnersCount = await this.permissionRepository.count({
-        where: {
-          nodeId: permissionToRevoke.nodeId,
-          permission: PermissionLevel.OWNER,
-          _id: { $ne: permissionObjectId }, // Đếm những owner khác, không tính cái sắp xóa
-        },
-      });
+    // --- 3. ÁP DỤNG CÁC QUY TẮC THU HỒI MỚI ---
+    const isRevokingOwner = permissionToRevoke.permission === PermissionLevel.OWNER;
+    const isRevokerRootAdmin = revoker.role === UserRole.ROOT_ADMIN;
 
-      // Nếu không còn owner nào khác, không cho phép xóa owner cuối cùng
-      if (otherOwnersCount === 0) {
+    // Nếu quyền bị thu hồi là OWNER
+    if (isRevokingOwner) {
+      // Quy tắc 3a: Chỉ RootAdmin mới có quyền thu hồi quyền OWNER
+      if (!isRevokerRootAdmin) {
         throw new BusinessException(
           ErrorCode.ACCESS_DENIED,
-          ErrorMessages.CANNOT_DELETE_LAST_OWNER,
+          ErrorMessages.CANNOT_REVOKE_OTHER_OWNER,
           403,
         );
       }
     }
 
+    // --- 4. GHI LOG VÀ THỰC HIỆN XÓA ---
     const node = await this.nodesService.findById(permissionToRevoke.nodeId);
     const targetUser = await this.usersService.findById(permissionToRevoke.userId.toHexString());
     await this.activityLogProducer.logActivity({
@@ -380,7 +406,7 @@ export class PermissionsService {
         revokedAt: new Date(),
       },
     });
-    // --- 4. THỰC HIỆN XÓA ---
+
     await this.permissionRepository.delete(permissionObjectId);
   }
   /**

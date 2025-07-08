@@ -28,7 +28,11 @@ export class PasswordPolicyGuard implements CanActivate {
     if (user.role === UserRole.ROOT_ADMIN) return true;
 
     if (user && user.mustChangePassword && !isChangePasswordRoute) {
-      throw new BusinessException(ErrorCode.ACCESS_DENIED, ErrorMessages.MUST_CHANGE_PASSWORD, 403);
+      throw new BusinessException(
+        ErrorCode.MUST_CHANGE_PASSWORD,
+        ErrorMessages.MUST_CHANGE_PASSWORD,
+        403,
+      );
     }
 
     return true;

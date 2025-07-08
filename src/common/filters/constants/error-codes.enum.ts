@@ -9,6 +9,7 @@ export enum ErrorCode {
   CANNOT_CREATE_USER = 'E1007',
   ACCOUNT_DISABLED = 'E1008',
   ACCESS_DENIED = 'E1009',
+  MUST_CHANGE_PASSWORD = 'E1010',
 
   // Node related
   NODE_NOT_FOUND = 'E4001',
@@ -22,6 +23,7 @@ export enum ErrorCode {
   PENDING_REQUEST_EXISTS = 'E2003',
 
   // Permission related
+  LAST_OWNER_CONFLICT = 'E3000',
   PERMISSION_NOT_FOUND = 'E3001',
 
   // General

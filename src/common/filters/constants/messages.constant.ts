@@ -27,11 +27,11 @@ export const ErrorMessages = {
   ACCESS_DENIED: 'Từ chối truy cập vào tài nguyên này',
   ALREADY_HAS_PERMISSION: 'Bạn đã có quyền truy cập vào mục này rồi.',
   CANNOT_CHANGE_OWN_PERMISSION: 'Bạn không thể tự thay đổi quyền của chính mình.',
-  ONLY_OWNER_CAN_GRANT: 'Chỉ chủ sở hữu mới có quyền cấp quyền cho mục này.',
   CANNOT_CHANGE_OTHER_OWNER: 'Bạn không có quyền thay đổi quyền của một Owner khác.',
-  PERMISSION_NOT_FOUND: 'Quyền này không tồn tại.',
+  ONLY_OWNER_CAN_GRANT: 'Chỉ chủ sở hữu mới có quyền cấp quyền cho mục này.',
   ONLY_OWNER_CAN_REVOKE: 'Chỉ chủ sở hữu mới có quyền thu hồi quyền trên mục này.',
-  CANNOT_REVOKE_OTHER_OWNER: 'Bạn không có quyền thu hồi quyền của một Owner khác.',
+  PERMISSION_NOT_FOUND: 'Quyền này không tồn tại.',
+  CANNOT_REVOKE_OTHER_OWNER: 'Bạn không có quyền thu hồi quyền chính mình hoặc của một Owner khác.',
   // eslint-disable-next-line max-len
   CANNOT_DELETE_LAST_OWNER:
     'Không thể xóa chủ sở hữu cuối cùng của mục này. Hãy chuyển quyền sở hữu cho người khác trước.',
