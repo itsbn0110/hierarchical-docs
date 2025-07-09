@@ -1,57 +1,117 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcryptjs';
 import { User } from '../users/entities/user.entity';
 import { ConfigService } from '@nestjs/config';
 import { ObjectId } from 'mongodb';
+import { BusinessException } from 'src/common/filters/business.exception';
+import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
+import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
-    private configService: ConfigService,
+    private readonly configService: ConfigService,
   ) {}
 
-  async validateUser(email: string, password: string) {
+  /**
+   * Xác thực người dùng bằng email và password.
+   * Được gọi bởi LocalStrategy.
+   */
+  async validateUser(email: string, password: string): Promise<Omit<User, 'hashPassword'>> {
     const user = await this.usersService.findByEmail(email);
-    if (
-      user &&
-      typeof user.hashPassword === 'string' &&
-      (await bcrypt.compare(password, user.hashPassword))
-    ) {
+    // Sử dụng user.hashPassword thay vì hashPassword để nhất quán
+    if (user && user.hashPassword && (await bcrypt.compare(password, user.hashPassword))) {
       return user;
     }
     return null;
   }
 
+  /**
+   * Xử lý logic sau khi đăng nhập thành công.
+   */
   async login(user: User) {
-    // 1. Tạo Access Token (hạn ngắn)
-    const accessTokenPayload = { username: user.username, sub: user._id, role: user.role };
-    const accessToken = this.jwtService.sign(accessTokenPayload, {
-      secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-      expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRES_IN'),
-    });
+    const tokens = await this.getTokens(user._id, user.username, user.role);
+    await this.updateRefreshToken(user._id, tokens.refreshToken);
+    return {
+      ...tokens,
+      user,
+    };
+  }
 
-    // 2. Tạo Refresh Token (hạn dài)
-    const refreshTokenPayload = { sub: user._id };
-    const refreshToken = this.jwtService.sign(refreshTokenPayload, {
-      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-      expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN'),
-    });
+  /**
+   * Xử lý logic làm mới token.
+   */
+  async refreshTokens(userId: string, refreshToken: string) {
+    const user = await this.usersService.findById(userId);
 
-    // 3. Hash và lưu Refresh Token vào database
-    await this.usersService.setCurrentRefreshToken(user._id, refreshToken);
+    if (!user || !user.hashedRefreshToken) {
+      throw new BusinessException(ErrorCode.UNAUTHORIZED, ErrorMessages.UNAUTHORIZED, 401);
+    }
+
+    const refreshTokenMatches = await bcrypt.compare(refreshToken, user.hashedRefreshToken);
+
+    if (!refreshTokenMatches) {
+      throw new BusinessException(ErrorCode.UNAUTHORIZED, ErrorMessages.UNAUTHORIZED, 401);
+    }
+
+    const tokens = await this.getTokens(user._id, user.username, user.role);
+    await this.updateRefreshToken(user._id, tokens.refreshToken);
+
+    return tokens;
+  }
+
+  /**
+   * Xử lý logic đăng xuất.
+   */
+  async logout(userId: string | ObjectId) {
+    // Chỉ cần xóa refresh token là đủ để vô hiệu hóa các phiên làm mới
+    await this.usersService.update(new ObjectId(userId), { hashedRefreshToken: null });
+  }
+
+  /**
+   * Helper: Tạo ra một cặp access và refresh token.
+   */
+  private async getTokens(userId: ObjectId, username: string, role: string) {
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(
+        {
+          sub: userId,
+          username: username,
+          role: role,
+        },
+        {
+          secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+          expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRES_IN'),
+        },
+      ),
+      this.jwtService.signAsync(
+        {
+          sub: userId,
+        },
+        {
+          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+          expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN'),
+        },
+      ),
+    ]);
 
     return {
       accessToken,
       refreshToken,
-      user, // Trả về user để client có thông tin ban đầu
     };
   }
 
-  async logout(userId: ObjectId) {
-    return this.usersService.removeRefreshToken(userId);
+  /**
+   * Helper: Hash và lưu refresh token mới vào database.
+   */
+  private async updateRefreshToken(userId: ObjectId, refreshToken: string) {
+    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+    await this.usersService.update(userId, {
+      hashedRefreshToken,
+    });
   }
 }

@@ -66,7 +66,6 @@ export class AuthController {
   @Post('refresh')
   @Public()
   @UseGuards(JwtRefreshGuard)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async refreshTokens(@Request() req, @Body() refreshTokenDto: RefreshTokenDto) {
     return this.authService.login(req.user);
   }

@@ -10,6 +10,7 @@ export enum ErrorCode {
   ACCOUNT_DISABLED = 'E1008',
   ACCESS_DENIED = 'E1009',
   MUST_CHANGE_PASSWORD = 'E1010',
+  TOKEN_EXPIRED = 'E1011',
 
   // Node related
   NODE_NOT_FOUND = 'E4001',

@@ -3,7 +3,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectConnection, InjectRepository } from '@nestjs/typeorm';
 import { ObjectId } from 'mongodb';
-import { Repository, In, Connection } from 'typeorm';
+import { Repository, In, Connection, DeepPartial } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { BusinessException } from 'src/common/filters/business.exception';
 import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
@@ -49,7 +49,6 @@ export class UsersService {
         HttpStatus.BAD_REQUEST,
       );
     }
-
     const temporaryPassword = randomBytes(8).toString('hex');
     const hashPassword = await bcrypt.hash(temporaryPassword, 10);
 
@@ -89,6 +88,11 @@ export class UsersService {
         ErrorMessages.USER_NOT_FOUND,
         HttpStatus.NOT_FOUND,
       );
+    }
+
+    // Không cho phép update email
+    if ((dto as any).email) {
+      delete (dto as any).email;
     }
 
     // Kiểm tra username trùng lặp nếu có thay đổi
@@ -210,6 +214,18 @@ export class UsersService {
     return { message: 'Người dùng và các dữ liệu liên quan đã được xóa thành công.' };
   }
 
+  /**
+   * Hàm update chung để cập nhật các trường của user.
+   * Hàm này sẽ được gọi bởi AuthService để cập nhật 'hashedRefreshToken'.
+   * Không bao giờ update email qua hàm này.
+   */
+  async update(userId: ObjectId, updatePayload: DeepPartial<User>): Promise<void> {
+    if ((updatePayload as any).email) {
+      delete (updatePayload as any).email;
+    }
+    await this.userRepository.update({ _id: userId }, updatePayload);
+  }
+
   async setCurrentRefreshToken(userId: ObjectId, refreshToken: string) {
     const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
     await this.userRepository.update({ _id: userId }, { hashedRefreshToken });
@@ -219,7 +235,7 @@ export class UsersService {
     return this.userRepository.update({ _id: userId }, { hashedRefreshToken: null });
   }
 
-    async findUserById(userId: string): Promise<User | null> {
+  async findUserById(userId: string): Promise<User | null> {
     if (!ObjectId.isValid(userId)) {
       return null;
     }

@@ -5,14 +5,14 @@ import { AuthService } from '../auth.service';
 import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
 import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
 import { BusinessException } from 'src/common/filters/business.exception';
+import { UserResponseDto } from '../dto/user-response.dto';
 
 @Injectable()
 export class LocalStrategy extends PassportStrategy(Strategy) {
   constructor(private authService: AuthService) {
     super({ usernameField: 'email' });
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async validate(email: string, pass: string): Promise<any> {
+  async validate(email: string, pass: string): Promise<UserResponseDto> {
     const user = await this.authService.validateUser(email, pass);
 
     if (!user) {
