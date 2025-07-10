@@ -4,6 +4,7 @@ import { AccessRequestsService } from './access-requests.service';
 import { CreateAccessRequestDto } from './dto/create-access-request.dto';
 import { AccessRequest } from './entities/access-request.entity';
 import { PendingRequestDto } from './dto/access-request-response.dto';
+import { ProcessedRequestDto } from './dto/processed-request.response.dto';
 
 @ApiTags('Access Requests')
 @ApiBearerAuth()
@@ -20,11 +21,20 @@ export class AccessRequestsController {
     return this.accessRequestsService.createAccessRequest(createAccessRequestDto, req.user);
   }
 
+
   @Get('pending')
   @ApiOperation({ summary: 'Lấy các yêu cầu đang chờ xử lý cho người dùng hiện tại' })
   @ApiResponse({ status: 200, type: [PendingRequestDto] })
   findPending(@Request() req) {
     return this.accessRequestsService.findPendingRequestsForOwner(req.user);
+  }
+
+    
+  @Get('processed')
+  @ApiOperation({ summary: 'Lấy lịch sử các yêu cầu đã xử lý cho người dùng hiện tại' })
+  @ApiResponse({ status: 200, type: [ProcessedRequestDto] })
+  findProcessed(@Request() req) {
+    return this.accessRequestsService.findProcessedRequestsForOwner(req.user);
   }
 
   @Post(':id/approve')
@@ -39,4 +49,6 @@ export class AccessRequestsController {
   denyRequest(@Param('id') id: string, @Request() req) {
     return this.accessRequestsService.deny(id, req.user);
   }
+
+
 }

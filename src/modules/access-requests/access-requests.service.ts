@@ -169,6 +169,67 @@ export class AccessRequestsService {
     return plainToInstance(PendingRequestDto, pendingRequests);
   }
 
+
+  async findProcessedRequestsForOwner(owner: User): Promise<any[]> { // Sử dụng DTO phù hợp sau
+    let matchCondition: any = {
+      status: { $in: [RequestStatus.APPROVED, RequestStatus.DENIED] },
+    };
+
+    // Nếu không phải RootAdmin, chỉ lấy các yêu cầu cho node mà họ sở hữu
+    if (owner.role !== UserRole.ROOT_ADMIN) {
+      const ownerPermissions = await this.permissionService.findAllOwnedByUser(owner._id);
+      const ownedNodeIds = ownerPermissions.map((p) => p.nodeId);
+
+      if (ownedNodeIds.length === 0) {
+        return []; // Nếu không sở hữu node nào, không có lịch sử để xem
+      }
+      matchCondition.nodeId = { $in: ownedNodeIds };
+    }
+
+    const processedRequests = await this.accessRequestRepository
+      .aggregate([
+        { $match: matchCondition },
+        { $sort: { reviewedAt: -1 } }, // Sắp xếp theo ngày xử lý mới nhất
+        { $limit: 100 }, // Giới hạn kết quả để tránh quá tải
+        { $lookup: { from: 'nodes', localField: 'nodeId', foreignField: '_id', as: 'nodeInfo' } },
+        { $lookup: { from: 'users', localField: 'requesterId', foreignField: '_id', as: 'requesterInfo' } },
+        // Join thêm một lần nữa để lấy thông tin người đã xử lý yêu cầu
+        { $lookup: { from: 'users', localField: 'reviewerId', foreignField: '_id', as: 'reviewerInfo' } },
+        // Dùng preserveNullAndEmptyArrays để không loại bỏ các bản ghi cũ chưa có reviewerId
+        { $unwind: { path: '$nodeInfo', preserveNullAndEmptyArrays: true } },
+        { $unwind: { path: '$requesterInfo', preserveNullAndEmptyArrays: true } },
+        { $unwind: { path: '$reviewerInfo', preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            _id: 1,
+            requestedPermission: 1,
+            status: 1,
+            isRecursive: 1,
+            createdAt: 1,
+            reviewedAt: 1,
+            node: {
+              _id: '$nodeInfo._id',
+              name: '$nodeInfo.name',
+              type: '$nodeInfo.type',
+            },
+            requester: {
+              _id: '$requesterInfo._id',
+              username: '$requesterInfo.username',
+            },
+            // Thêm thông tin người xử lý vào kết quả trả về
+            reviewer: {
+              _id: '$reviewerInfo._id',
+              username: '$reviewerInfo.username',
+            },
+          },
+        },
+      ])
+      .toArray();
+
+    // TODO: Tạo một ProcessedRequestDto và chuyển đổi dữ liệu
+    return processedRequests;
+  }
+
   async approve(requestId: string, reviewer: User): Promise<AccessRequest> {
     const request = await this.findRequestAndCheckReviewerPermission(requestId, reviewer);
 
