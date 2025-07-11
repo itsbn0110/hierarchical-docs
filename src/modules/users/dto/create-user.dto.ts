@@ -1,7 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsString, IsNotEmpty, IsEnum, IsBoolean, IsOptional } from 'class-validator';
+import { IsEmail, IsString, IsNotEmpty, IsBoolean, IsOptional } from 'class-validator';
 import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
-import { UserRole } from 'src/common/enums/projects.enum';
 
 export class CreateUserDto {
   /**
@@ -27,18 +26,6 @@ export class CreateUserDto {
   @IsEmail({}, { message: ErrorMessages.INVALID_EMAIL })
   @IsNotEmpty({ message: ErrorMessages.EMAIL_REQUIRED })
   email: string;
-
-  /**
-   * Vai trò của người dùng trong hệ thống.
-   */
-  @ApiProperty({
-    description: 'Vai trò của người dùng.',
-    enum: UserRole,
-    example: UserRole.USER,
-  })
-  @IsEnum(UserRole, { message: ErrorMessages.INVALID_ROLE })
-  @IsNotEmpty({ message: ErrorMessages.ROLE_REQUIRED })
-  role: UserRole;
 
   /**
    * Trạng thái hoạt động của tài khoản. Mặc định là true.

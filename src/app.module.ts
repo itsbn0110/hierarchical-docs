@@ -21,7 +21,8 @@ import { bullConfig } from './config/queue.config';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { SearchModule } from './modules/search/search.module';
 import { ActivityLogModule } from './modules/activity-log/activity-log.module';
-
+import { ScheduleModule } from '@nestjs/schedule';
+import { TasksModule } from './modules/tasks/tasks.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -48,6 +49,7 @@ import { ActivityLogModule } from './modules/activity-log/activity-log.module';
       inject: [ConfigService],
       useFactory: bullConfig,
     }),
+    ScheduleModule.forRoot(),
     UsersModule,
     AuthModule,
     NodesModule,
@@ -55,6 +57,7 @@ import { ActivityLogModule } from './modules/activity-log/activity-log.module';
     AccessRequestsModule,
     SearchModule,
     ActivityLogModule,
+    TasksModule,
   ],
   providers: [
     {

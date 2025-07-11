@@ -515,6 +515,7 @@ export class NodesService {
 
     const movedNode = await this.nodesRepository.findOne({ where: { _id: nodeToMoveId } });
 
+    console.log('Chuẩn bị ghi log hoạt động...');
     await this.activityLogProducer.logActivity({
       userId: user._id,
       action: ActivityAction.NODE_MOVED,
@@ -528,10 +529,10 @@ export class NodesService {
         movedAt: new Date(),
       },
     }); // Trả về node đã được cập nhật thành công
+    console.log('Đã ghi log hoạt động thành công!');
 
     return movedNode;
   }
-
   async findById(nodeId: ObjectId): Promise<Node | null> {
     return this.nodesRepository.findOne({ where: { _id: new ObjectId(nodeId) } });
   }
