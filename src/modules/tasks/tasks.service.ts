@@ -22,7 +22,6 @@ export class TasksService {
   @Cron(CronExpression.EVERY_DAY_AT_11AM)
   async handleCron() {
     this.logger.log('Bắt đầu tác vụ dọn dẹp các yêu cầu truy cập cũ...');
-
     // 1. Tính toán ngày giới hạn (30 ngày trước)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);

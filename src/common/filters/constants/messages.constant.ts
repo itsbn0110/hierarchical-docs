@@ -40,6 +40,7 @@ export const ErrorMessages = {
   DOCUMENT_NOT_FOUND: 'Không tìm thấy tài liệu',
   FOLDER_NOT_FOUND: 'Không tìm thấy thư mục',
   INVALID_DOCUMENT_TYPE: 'Loại tài liệu không hợp lệ',
+  ONLY_OWNER_CAN_DELETE: 'Chỉ chủ sở hữu mới có quyền xóa tài liệu này.',
 
   // Request related
   REQUEST_LIMIT_EXCEEDED: 'Quá nhiều yêu cầu, vui lòng thử lại sau',

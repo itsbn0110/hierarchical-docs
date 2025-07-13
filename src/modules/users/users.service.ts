@@ -81,6 +81,7 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, dto: UpdateUserDto): Promise<User> {
+    console.log('check userId: ', dto);
     const user = await this.userRepository.findOne({ where: { _id: new ObjectId(userId) } });
     if (!user) {
       throw new BusinessException(

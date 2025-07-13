@@ -30,6 +30,10 @@ export class Permission {
   permission: PermissionLevel;
 
   @Expose()
+  @Column({ type: 'timestamp', nullable: true })
+  lastAccessedAt?: Date;
+
+  @Expose()
   @Column()
   @Transform(transformObjectId)
   grantedBy: ObjectId;

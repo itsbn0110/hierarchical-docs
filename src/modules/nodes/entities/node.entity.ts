@@ -1,4 +1,11 @@
-import { Entity, ObjectIdColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  ObjectIdColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  DeleteDateColumn,
+} from 'typeorm';
 import { NodeType } from 'src/common/enums/projects.enum';
 import { ObjectId } from 'mongodb';
 import { IsInt, Min } from 'class-validator';
@@ -70,4 +77,7 @@ export class Node {
   @Expose()
   @UpdateDateColumn({ type: 'timestamp' })
   updatedAt: Date;
+
+  @DeleteDateColumn({ type: 'timestamp', nullable: true })
+  deletedAt?: Date;
 }

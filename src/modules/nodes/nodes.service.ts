@@ -1,15 +1,8 @@
 // src/nodes/nodes.service.ts
 
-import {
-  Injectable,
-  NotFoundException,
-  ForbiddenException,
-  Inject,
-  forwardRef,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { InjectConnection, InjectRepository } from '@nestjs/typeorm';
-import { Connection, MongoRepository } from 'typeorm';
+import { Connection, In, IsNull, MongoRepository, Not } from 'typeorm';
 import { ObjectId } from 'mongodb';
 
 import { Node } from './entities/node.entity';
@@ -31,6 +24,8 @@ import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
 import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
 import { UsersService } from '../users/users.service';
 import { NodeDetailsDto } from './dto/node-details-dto';
+import { TrashedItemDto } from './dto/trashed-item.dto';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 type Ancestor = {
   _id: ObjectId;
@@ -39,6 +34,7 @@ type Ancestor = {
 
 @Injectable()
 export class NodesService {
+  logger: any;
   constructor(
     @InjectRepository(Node)
     private readonly nodesRepository: MongoRepository<Node>,
@@ -238,6 +234,9 @@ export class NodesService {
       nodeObjectId,
     );
 
+    // 5. Cập nhật trường lastAccessedAt
+    this.permissionsService.updateLastAccessed(user._id, nodeObjectId);
+
     // 5. Kết hợp dữ liệu và chuyển đổi sang DTO
     // Dùng plainToInstance để đảm bảo chỉ các trường có @Expose() trong DTO mới được trả về
     const nodeDetailData = plainToInstance(NodeDetailsDto, {
@@ -247,6 +246,60 @@ export class NodesService {
     });
 
     return nodeDetailData;
+  }
+
+  async findTrashedNodes(user: User): Promise<TrashedItemDto[]> {
+    const ownerPermissions = await this.permissionsService.findAllOwnedByUser(user._id);
+    const ownedNodeIds = ownerPermissions.map((p) => p.nodeId);
+
+    if (ownedNodeIds.length === 0) {
+      return [];
+    }
+
+    const results = await this.nodesRepository
+      .aggregate([
+        {
+          $match: {
+            _id: { $in: ownedNodeIds },
+            deletedAt: { $ne: null }, // Sử dụng toán tử native của MongoDB
+          },
+        },
+        {
+          $lookup: {
+            from: 'nodes',
+            localField: 'parentId',
+            foreignField: '_id',
+            as: 'parentDetails',
+          },
+        },
+        {
+          $match: {
+            $or: [{ parentDetails: [] }, { 'parentDetails.deletedAt': null }],
+          },
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'createdBy',
+            foreignField: '_id',
+            as: 'ownerInfo',
+          },
+        },
+        { $unwind: { path: '$ownerInfo', preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            type: 1,
+            deletedAt: 1,
+            owner: '$ownerInfo.username',
+          },
+        },
+        { $sort: { deletedAt: -1 } },
+      ])
+      .toArray();
+
+    return plainToInstance(TrashedItemDto, results);
   }
   // ... (Các hàm updateName, updateContent, delete, move giữ nguyên)
   async updateName(nodeId: string, dto: UpdateNodeNameDto, user: User): Promise<Node> {
@@ -331,10 +384,13 @@ export class NodesService {
     return this.nodesRepository.save(nodeToUpdate);
   }
 
-  async delete(nodeId: string, user: User): Promise<{ deletedCount: number }> {
-    const nodeObjectId = new ObjectId(nodeId); // --- BƯỚC 1: TÌM NODE VÀ KIỂM TRA QUYỀN OWNER (Thực hiện trước transaction) ---
+  async deletePermanently(nodeId: string, user: User): Promise<{ deletedCount: number }> {
+    const nodeObjectId = new ObjectId(nodeId);
 
-    const nodeToDelete = await this.nodesRepository.findOne({ where: { _id: nodeObjectId } });
+    const nodeToDelete = await this.nodesRepository.findOne({
+      where: { _id: nodeObjectId },
+      withDeleted: true,
+    });
     if (!nodeToDelete) {
       throw new BusinessException(ErrorCode.NODE_NOT_FOUND, ErrorMessages.DOCUMENT_NOT_FOUND, 404);
     }
@@ -346,30 +402,28 @@ export class NodesService {
     if (!isOwner) {
       throw new BusinessException(
         ErrorCode.NODE_FORBIDDEN,
-        ErrorMessages.ONLY_OWNER_CAN_REVOKE,
+        ErrorMessages.ONLY_OWNER_CAN_DELETE,
         403,
       );
-    } // --- BƯỚC 2: TÌM TẤT CẢ CÁC NODE CON CHÁU CẦN XÓA THEO ---
-    // Dùng pattern "Array of Ancestors" để tìm tất cả các descendant một cách hiệu quả
+    }
 
     const descendants = await this.nodesRepository.find({
       where: { 'ancestors._id': nodeObjectId },
-    }); // Tạo một mảng chứa ID của node chính và tất cả con cháu của nó
-
-    const idsToDelete = [nodeToDelete._id, ...descendants.map((d) => d._id)]; // --- BƯỚC 3: THỰC HIỆN XÓA HÀNG LOẠT TRONG MỘT TRANSACTION ĐỂ ĐẢM BẢO AN TOÀN ---
+      withDeleted: true,
+    });
+    const idsToDelete = [nodeToDelete._id, ...descendants.map((d) => d._id)];
 
     await this.connection.transaction(async (transactionalEntityManager) => {
       const nodeRepo = transactionalEntityManager.getMongoRepository(Node);
       const permissionRepo = transactionalEntityManager.getMongoRepository(Permission);
-      const accessRequestRepo = transactionalEntityManager.getMongoRepository(AccessRequest); // 3.1. Xóa các permissions liên quan
+      const accessRequestRepo = transactionalEntityManager.getMongoRepository(AccessRequest);
 
-      await permissionRepo.deleteMany({ nodeId: { $in: idsToDelete } }); // 3.2. Xóa các access requests liên quan
-
-      await accessRequestRepo.deleteMany({ nodeId: { $in: idsToDelete } }); // 3.3. Cuối cùng, xóa chính các node đó
-
+      await permissionRepo.deleteMany({ nodeId: { $in: idsToDelete } });
+      await accessRequestRepo.deleteMany({ nodeId: { $in: idsToDelete } });
       await nodeRepo.deleteMany({ _id: { $in: idsToDelete } });
     });
 
+    // TODO: Ghi log xóa vĩnh viễn
     await this.activityLogProducer.logActivity({
       userId: user._id,
       action: ActivityAction.NODE_DELETED,
@@ -383,6 +437,161 @@ export class NodesService {
     }); // Trả về số lượng mục đã bị xóa để front-end có thể hiển thị thông báo
 
     return { deletedCount: idsToDelete.length };
+  }
+  async softDelete(nodeId: string, user: User): Promise<{ deletedCount: number }> {
+    const nodeObjectId = new ObjectId(nodeId);
+    const nodeToDelete = await this.nodesRepository.findOne({
+      where: { _id: nodeObjectId, deletedAt: null },
+    });
+    if (!nodeToDelete) {
+      throw new BusinessException(ErrorCode.NODE_NOT_FOUND, ErrorMessages.DOCUMENT_NOT_FOUND, 404);
+    }
+    const isOwner = await this.permissionsService.checkUserPermissionForNode(
+      user,
+      nodeToDelete._id,
+      PermissionLevel.OWNER,
+    );
+    if (!isOwner) {
+      throw new BusinessException(
+        ErrorCode.NODE_FORBIDDEN,
+        ErrorMessages.ONLY_OWNER_CAN_DELETE,
+        403,
+      );
+    }
+
+    const descendants = await this.nodesRepository.find({
+      where: { 'ancestors._id': nodeObjectId, deletedAt: null },
+    });
+    const idsToSoftDelete = [nodeToDelete._id, ...descendants.map((d) => d._id)];
+    const deletionDate = new Date();
+
+    await this.nodesRepository.updateMany(
+      { _id: { $in: idsToSoftDelete } }, // Dùng $in của MongoDB native driver
+      { $set: { deletedAt: deletionDate } },
+    );
+
+    await this.activityLogProducer.logActivity({
+      userId: user._id,
+      action: ActivityAction.NODE_DELETED,
+      targetId: nodeObjectId,
+      details: {
+        deletedAt: deletionDate,
+        deletedBy: user.username,
+        nodeName: nodeToDelete.name,
+        type: nodeToDelete.type,
+      },
+    });
+
+    return { deletedCount: idsToSoftDelete.length };
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async handleEmptyTrashCron() {
+    this.logger.log('Bắt đầu tác vụ tự động dọn dẹp thùng rác...');
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // Tìm tất cả các mục trong thùng rác cũ hơn 30 ngày
+    const oldItems = await this.nodesRepository.find({
+      where: {
+        deletedAt: { $lt: thirtyDaysAgo } as any,
+      },
+      withDeleted: true, // Quan trọng: Phải tìm cả trong thùng rác
+    });
+
+    if (oldItems.length === 0) {
+      this.logger.log('Không có mục nào cũ cần xóa.');
+      return;
+    }
+
+    this.logger.log(`Phát hiện ${oldItems.length} mục cần xóa vĩnh viễn.`);
+
+    for (const item of oldItems) {
+      try {
+        await this._deletePermanentlyInternal(item._id);
+        this.logger.log(`Đã xóa vĩnh viễn mục: ${item.name} (ID: ${item._id})`);
+      } catch (error) {
+        this.logger.error(`Lỗi khi xóa vĩnh viễn mục ${item._id}:`, error.stack);
+      }
+    }
+
+    this.logger.log('Đã hoàn tất tác vụ dọn dẹp thùng rác.');
+  }
+
+  /**
+   * HÀM NỘI BỘ: Chứa logic xóa cứng cốt lõi.
+   */
+  private async _deletePermanentlyInternal(nodeId: ObjectId): Promise<{ deletedCount: number }> {
+    const descendants = await this.nodesRepository.find({
+      where: { 'ancestors._id': nodeId },
+      withDeleted: true,
+    });
+    const idsToDelete = [nodeId, ...descendants.map((d) => d._id)];
+
+    await this.connection.transaction(async (transactionalEntityManager) => {
+      const nodeRepo = transactionalEntityManager.getMongoRepository(Node);
+      const permissionRepo = transactionalEntityManager.getMongoRepository(Permission);
+      const accessRequestRepo = transactionalEntityManager.getMongoRepository(AccessRequest);
+
+      await permissionRepo.deleteMany({ nodeId: { $in: idsToDelete } });
+      await accessRequestRepo.deleteMany({ nodeId: { $in: idsToDelete } });
+      await nodeRepo.deleteMany({ _id: { $in: idsToDelete } });
+    });
+
+    return { deletedCount: idsToDelete.length };
+  }
+
+  async restore(nodeId: string, user: User): Promise<Node> {
+    const nodeObjectId = new ObjectId(nodeId);
+
+    const nodeToRestore = await this.nodesRepository.findOne({
+      where: { _id: nodeObjectId },
+      withDeleted: true,
+    });
+
+    if (!nodeToRestore || !nodeToRestore.deletedAt) {
+      throw new BusinessException(ErrorCode.NODE_NOT_FOUND, 'Mục không có trong thùng rác.', 404);
+    }
+
+    const isOwner = await this.permissionsService.checkUserPermissionForNode(
+      user,
+      nodeObjectId,
+      PermissionLevel.OWNER,
+    );
+    if (!isOwner) {
+      throw new BusinessException(
+        ErrorCode.NODE_FORBIDDEN,
+        'Bạn không có quyền khôi phục mục này.',
+        403,
+      );
+    }
+
+    const descendants = await this.nodesRepository.find({
+      where: { 'ancestors._id': nodeObjectId, deletedAt: nodeToRestore.deletedAt },
+      withDeleted: true,
+    });
+    const idsToRestore = [nodeToRestore._id, ...descendants.map((d) => d._id)];
+
+    // SỬA LỖI: Thay thế .restore() bằng .updateMany() để tương thích với MongoDB
+    await this.nodesRepository.updateMany(
+      { _id: { $in: idsToRestore } }, // Dùng $in của MongoDB native driver
+      { $set: { deletedAt: null } },
+    );
+    const restoredAt = new Date();
+    // TODO: Ghi log khôi phục
+    await this.activityLogProducer.logActivity({
+      userId: user._id,
+      action: ActivityAction.NODE_TRASHED, // Có thể đổi tên thành NODE_TRASHED
+      targetId: nodeObjectId,
+      details: {
+        restoredAt,
+        retoredBy: user.username,
+        nodeName: nodeToRestore.name,
+        type: nodeToRestore.type,
+      },
+    });
+    return this.nodesRepository.findOne({ where: { _id: nodeObjectId } });
   }
 
   async move(nodeId: string, dto: MoveNodeDto, user: User): Promise<Node> {

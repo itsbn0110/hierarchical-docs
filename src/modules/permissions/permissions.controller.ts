@@ -5,6 +5,8 @@ import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { PermissionResponseDto } from './dto/permission.response.dto';
 import { ActivityLogResponseDto } from '../activity-log/dto/activity-log.response.dto';
 import { InvitePermissionDto } from './dto/invite-permission.dto';
+import { SharedNodeDto } from './dto/shared.dto';
+import { RecentItemDto } from './dto/recent.response.dto';
 
 @Controller('permissions')
 export class PermissionsController {
@@ -28,6 +30,20 @@ export class PermissionsController {
   })
   async getActivityForNode(@Param('nodeId') nodeId: string): Promise<ActivityLogResponseDto[]> {
     return this.permissionsService.getActivityForNode(nodeId);
+  }
+
+  @Get('shared-with-me')
+  @ApiOperation({ summary: 'Lấy các mục đã được chia sẻ với người dùng hiện tại' })
+  @ApiResponse({ status: 200, type: [SharedNodeDto] })
+  findSharedWithMe(@Request() req): Promise<SharedNodeDto[]> {
+    return this.permissionsService.findSharedWithUser(req.user);
+  }
+
+  @Get('recent')
+  @ApiOperation({ summary: 'Lấy các mục đã truy cập gần đây' })
+  @ApiResponse({ status: 200, type: [RecentItemDto] })
+  findRecent(@Request() req): Promise<RecentItemDto[]> {
+    return this.permissionsService.findRecentForUser(req.user);
   }
 
   @Post('grant')

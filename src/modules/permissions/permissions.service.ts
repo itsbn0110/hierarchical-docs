@@ -20,6 +20,8 @@ import { PermissionResponseDto } from './dto/permission.response.dto';
 import { plainToInstance } from 'class-transformer';
 import { ActivityLogResponseDto } from '../activity-log/dto/activity-log.response.dto';
 import { InvitePermissionDto } from './dto/invite-permission.dto';
+import { SharedNodeDto } from './dto/shared.dto';
+import { RecentItemDto } from './dto/recent.response.dto';
 @Injectable()
 export class PermissionsService {
   constructor(
@@ -409,6 +411,57 @@ export class PermissionsService {
 
     await this.permissionRepository.delete(permissionObjectId);
   }
+
+  async findSharedWithUser(currentUser: User): Promise<SharedNodeDto[]> {
+    const results = await this.permissionRepository
+      .aggregate([
+        // 1. Tìm tất cả các quyền của user hiện tại, nhưng KHÔNG PHẢI là Owner
+        {
+          $match: {
+            userId: currentUser._id,
+            permission: { $ne: PermissionLevel.OWNER },
+          },
+        },
+        // 2. Join với collection 'nodes' để lấy thông tin của file/folder
+        {
+          $lookup: {
+            from: 'nodes',
+            localField: 'nodeId',
+            foreignField: '_id',
+            as: 'nodeDetails',
+          },
+        },
+        // 3. Mở mảng nodeDetails (mỗi quyền chỉ có 1 node)
+        { $unwind: '$nodeDetails' },
+        // 4. Join với collection 'users' để tìm người đã tạo ra node đó (chủ sở hữu)
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'nodeDetails.createdBy',
+            foreignField: '_id',
+            as: 'ownerDetails',
+          },
+        },
+        // 5. Mở mảng ownerDetails
+        { $unwind: '$ownerDetails' },
+        // 6. Định dạng lại dữ liệu trả về
+        {
+          $project: {
+            _id: '$nodeDetails._id', // ID của node
+            name: '$nodeDetails.name',
+            type: '$nodeDetails.type',
+            yourPermission: '$permission', // Quyền của bạn trên node này
+            sharedBy: '$ownerDetails.username', // Người đã chia sẻ (chủ sở hữu)
+            sharedAt: '$grantedAt', // Ngày được cấp quyền
+          },
+        },
+        { $sort: { sharedAt: -1 } }, // Sắp xếp theo ngày chia sẻ mới nhất
+      ])
+      .toArray();
+
+    return plainToInstance(SharedNodeDto, results);
+  }
+
   /**
    * TÌM TẤT CẢ ID CỦA OWNER TRÊN MỘT NODE
    */
@@ -493,5 +546,65 @@ export class PermissionsService {
     if (operations.length > 0) {
       await this.permissionRepository.bulkWrite(operations);
     }
+  }
+
+  async updateLastAccessed(userId: ObjectId, nodeId: ObjectId): Promise<void> {
+    // Không cần chờ (await) để không làm chậm request chính của người dùng
+    this.permissionRepository
+      .updateOne({ userId, nodeId }, { $set: { lastAccessedAt: new Date() } })
+      .catch((err) => {
+        // Ghi log lỗi nếu có nhưng không làm ảnh hưởng đến luồng chính
+        console.error(`Failed to update lastAccessedAt for user ${userId} on node ${nodeId}`, err);
+      });
+  }
+
+  async findRecentForUser(currentUser: User): Promise<RecentItemDto[]> {
+    const results = await this.permissionRepository
+      .aggregate([
+        // 1. Tìm tất cả quyền của user, có lastAccessedAt và không phải là Owner
+        {
+          $match: {
+            userId: currentUser._id,
+            lastAccessedAt: { $exists: true },
+          },
+        },
+        // 2. Sắp xếp theo thời gian truy cập mới nhất
+        { $sort: { lastAccessedAt: -1 } },
+        // 3. Giới hạn 50 kết quả gần nhất
+        { $limit: 50 },
+        // 4. Join với 'nodes' để lấy thông tin
+        {
+          $lookup: {
+            from: 'nodes',
+            localField: 'nodeId',
+            foreignField: '_id',
+            as: 'nodeInfo',
+          },
+        },
+        { $unwind: '$nodeInfo' },
+        // 5. Join với 'users' để lấy tên chủ sở hữu
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'nodeInfo.createdBy',
+            foreignField: '_id',
+            as: 'ownerInfo',
+          },
+        },
+        { $unwind: '$ownerInfo' },
+        // 6. Định dạng lại dữ liệu
+        {
+          $project: {
+            _id: '$nodeInfo._id',
+            name: '$nodeInfo.name',
+            type: '$nodeInfo.type',
+            owner: '$ownerInfo.username',
+            lastAccessedAt: '$lastAccessedAt',
+          },
+        },
+      ])
+      .toArray();
+
+    return plainToInstance(RecentItemDto, results);
   }
 }

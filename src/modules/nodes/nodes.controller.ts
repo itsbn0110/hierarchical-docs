@@ -14,18 +14,17 @@ import { NodeDetailsDto } from './dto/node-details-dto';
 export class NodesController {
   constructor(private readonly nodesService: NodesService) {}
 
-  @Post()
-  @ApiOperation({ summary: 'Tạo một node mới (thư mục hoặc file)' })
-  @ApiResponse({ status: 201, description: 'Node đã được tạo thành công.', type: Node })
-  async create(@Body() createNodeDto: CreateNodeDto, @Req() req: any): Promise<Node> {
-    return this.nodesService.create(createNodeDto, req.user);
-  }
-
   @Get()
   @ApiOperation({ summary: 'Lấy các node con để hiển thị cây thư mục (lazy-loading)' })
   @ApiResponse({ status: 200, description: 'Danh sách các node con.', type: [TreeNodeDto] })
   getTree(@Query('parentId') parentId: string | null = null, @Req() req): Promise<TreeNodeDto[]> {
     return this.nodesService.getTreeForUser(parentId, req.user);
+  }
+
+  @Get('trash')
+  @ApiOperation({ summary: 'Lấy các mục trong thùng rác của người dùng' })
+  findTrash(@Req() req) {
+    return this.nodesService.findTrashedNodes(req.user);
   }
 
   @Get(':id')
@@ -36,6 +35,18 @@ export class NodesController {
   getNodeDetails(@Param('id') id: string, @Req() req): Promise<NodeDetailsDto> {
     // Gọi hàm service mới và trả về toàn bộ entity Node
     return this.nodesService.getNodeDetails(id, req.user);
+  }
+
+  @Post()
+  @ApiOperation({ summary: 'Tạo một node mới (thư mục hoặc file)' })
+  @ApiResponse({ status: 201, description: 'Node đã được tạo thành công.', type: Node })
+  async create(@Body() createNodeDto: CreateNodeDto, @Req() req: any): Promise<Node> {
+    return this.nodesService.create(createNodeDto, req.user);
+  }
+  @Post(':id/restore')
+  @ApiOperation({ summary: 'Khôi phục một mục từ thùng rác' })
+  restore(@Param('id') id: string, @Req() req) {
+    return this.nodesService.restore(id, req.user);
   }
 
   @Patch(':id/name')
@@ -64,14 +75,16 @@ export class NodesController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Xóa một node (và tất cả con cháu của nó)' })
-  @ApiResponse({ status: 200, description: 'Xóa thành công.' })
-  async delete(@Param('id') id: string, @Req() req) {
-    const deletedResult = await this.nodesService.delete(id, req.user);
-    return {
-      statusCode: 200,
-      message: 'Xóa thành công.',
-      deletedCount: deletedResult.deletedCount,
-    };
+  @ApiOperation({ summary: 'Di chuyển một node vào thùng rác (Soft Delete)' })
+  @ApiResponse({ status: 200, description: 'Di chuyển vào thùng rác thành công.' })
+  softDelete(@Param('id') id: string, @Req() req) {
+    return this.nodesService.softDelete(id, req.user);
+  }
+
+  @Delete(':id/permanently')
+  @ApiOperation({ summary: 'Xóa vĩnh viễn một mục khỏi thùng rác' })
+  @ApiResponse({ status: 200, description: 'Xóa vĩnh viễn thành công.' })
+  deletePermanently(@Param('id') id: string, @Req() req) {
+    return this.nodesService.deletePermanently(id, req.user);
   }
 }

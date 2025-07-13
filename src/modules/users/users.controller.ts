@@ -58,6 +58,7 @@ export class UsersController {
   @Roles(UserRole.ROOT_ADMIN)
   @Patch(':id')
   async updateUser(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    console.log('hello');
     const user = await this.usersService.updateProfile(id, updateUserDto);
     return {
       success: true,
@@ -79,7 +80,7 @@ export class UsersController {
     return this.usersService.updateStatus(id, updateUserStatusDto.isActive);
   }
 
-  @Patch('me/password')
+  @Patch('/me/password')
   @IsChangePasswordRoute()
   changeMyPassword(@Req() req, @Body() changePasswordDto: ChangePasswordDto) {
     console.log(req.user);

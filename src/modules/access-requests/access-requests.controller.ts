@@ -21,7 +21,6 @@ export class AccessRequestsController {
     return this.accessRequestsService.createAccessRequest(createAccessRequestDto, req.user);
   }
 
-
   @Get('pending')
   @ApiOperation({ summary: 'Lấy các yêu cầu đang chờ xử lý cho người dùng hiện tại' })
   @ApiResponse({ status: 200, type: [PendingRequestDto] })
@@ -29,7 +28,6 @@ export class AccessRequestsController {
     return this.accessRequestsService.findPendingRequestsForOwner(req.user);
   }
 
-    
   @Get('processed')
   @ApiOperation({ summary: 'Lấy lịch sử các yêu cầu đã xử lý cho người dùng hiện tại' })
   @ApiResponse({ status: 200, type: [ProcessedRequestDto] })
@@ -49,6 +47,4 @@ export class AccessRequestsController {
   denyRequest(@Param('id') id: string, @Request() req) {
     return this.accessRequestsService.deny(id, req.user);
   }
-
-
 }

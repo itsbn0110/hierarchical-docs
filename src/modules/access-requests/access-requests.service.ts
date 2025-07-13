@@ -169,8 +169,8 @@ export class AccessRequestsService {
     return plainToInstance(PendingRequestDto, pendingRequests);
   }
 
-
-  async findProcessedRequestsForOwner(owner: User): Promise<any[]> { // Sử dụng DTO phù hợp sau
+  async findProcessedRequestsForOwner(owner: User): Promise<any[]> {
+    // Sử dụng DTO phù hợp sau
     let matchCondition: any = {
       status: { $in: [RequestStatus.APPROVED, RequestStatus.DENIED] },
     };
@@ -192,9 +192,23 @@ export class AccessRequestsService {
         { $sort: { reviewedAt: -1 } }, // Sắp xếp theo ngày xử lý mới nhất
         { $limit: 100 }, // Giới hạn kết quả để tránh quá tải
         { $lookup: { from: 'nodes', localField: 'nodeId', foreignField: '_id', as: 'nodeInfo' } },
-        { $lookup: { from: 'users', localField: 'requesterId', foreignField: '_id', as: 'requesterInfo' } },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'requesterId',
+            foreignField: '_id',
+            as: 'requesterInfo',
+          },
+        },
         // Join thêm một lần nữa để lấy thông tin người đã xử lý yêu cầu
-        { $lookup: { from: 'users', localField: 'reviewerId', foreignField: '_id', as: 'reviewerInfo' } },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'reviewerId',
+            foreignField: '_id',
+            as: 'reviewerInfo',
+          },
+        },
         // Dùng preserveNullAndEmptyArrays để không loại bỏ các bản ghi cũ chưa có reviewerId
         { $unwind: { path: '$nodeInfo', preserveNullAndEmptyArrays: true } },
         { $unwind: { path: '$requesterInfo', preserveNullAndEmptyArrays: true } },

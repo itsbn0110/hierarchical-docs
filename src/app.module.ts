@@ -35,8 +35,8 @@ import { TasksModule } from './modules/tasks/tasks.module';
       useFactory: (config: ConfigService) => ({
         type: 'mongodb',
         url: config.get<string>('MONGODB_URI'),
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
+        // useNewUrlParser: true,
+        // useUnifiedTopology: true,
         database: config.get<string>('MONGODB_DBNAME'),
         entities: [User, Node, Permission, AccessRequest, ActivityLog],
         // -----------------------------------------------------------
