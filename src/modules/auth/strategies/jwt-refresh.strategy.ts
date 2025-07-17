@@ -1,10 +1,13 @@
 import { PassportStrategy } from "@nestjs/passport";
 import { Strategy, ExtractJwt } from "passport-jwt";
-import { Injectable, ForbiddenException } from "@nestjs/common";
+import { Injectable, ForbiddenException, HttpStatus } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { UsersService } from "../../users/users.service";
 import { Request } from "express";
 import * as bcrypt from "bcryptjs";
+import { ErrorCode } from "src/common/filters/constants/error-codes.enum";
+import { ErrorMessages } from "src/common/filters/constants/messages.constant";
+import { BusinessException } from "src/common/filters/business.exception";
 
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(Strategy, "jwt-refresh") {
@@ -32,7 +35,7 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, "jwt-refresh"
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
-      throw new ForbiddenException("Refresh token not found in body");
+       throw new BusinessException(ErrorCode.REFRESH_TOKEN_NOT_FOUND, ErrorMessages.REFRESH_TOKEN_NOT_FOUND, HttpStatus.FORBIDDEN);
     }
 
     // 2. Tìm người dùng từ payload
@@ -40,7 +43,7 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, "jwt-refresh"
 
     // 3. Kiểm tra xem người dùng có tồn tại, active, và có refresh token trong DB không
     if (!user || !user.isActive || !user.hashedRefreshToken) {
-      throw new ForbiddenException("Access Denied");
+      throw new BusinessException(ErrorCode.ACCESS_DENIED, ErrorMessages.ACCESS_DENIED, HttpStatus.FORBIDDEN);
     }
 
     // 4. So sánh refresh token từ request với token đã hash trong DB
@@ -48,7 +51,7 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, "jwt-refresh"
 
     // Nếu không khớp, từ chối
     if (!refreshTokenMatches) {
-      throw new ForbiddenException("Access Denied");
+       throw new BusinessException(ErrorCode.ACCESS_DENIED, ErrorMessages.ACCESS_DENIED, HttpStatus.FORBIDDEN);
     }
 
     // 5. Nếu mọi thứ hợp lệ, trả về user (loại bỏ các trường nhạy cảm)

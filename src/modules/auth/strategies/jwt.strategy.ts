@@ -28,7 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     if (user && !user.isActive) {
-      throw new BusinessException(ErrorCode.USER_NOT_FOUND, ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND);
+      throw new BusinessException(ErrorCode.ACCOUNT_DISABLED, ErrorMessages.ACCOUNT_DISABLED, HttpStatus.FORBIDDEN);
     }
 
     return user;

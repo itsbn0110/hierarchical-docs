@@ -167,14 +167,6 @@ export class UsersService {
     await this.userRepository.update({ _id: userId }, updatePayload);
   }
 
-  async setCurrentRefreshToken(userId: ObjectId, refreshToken: string) {
-    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
-    await this.userRepository.update({ _id: userId }, { hashedRefreshToken });
-  }
-
-  async removeRefreshToken(userId: ObjectId) {
-    return this.userRepository.update({ _id: userId }, { hashedRefreshToken: null });
-  }
 
   async findUserById(userId: string): Promise<User | null> {
     if (!ObjectId.isValid(userId)) {

@@ -23,6 +23,7 @@ import { SearchModule } from "./modules/search/search.module";
 import { ActivityLogModule } from "./modules/activity-log/activity-log.module";
 import { ScheduleModule } from "@nestjs/schedule";
 import { TasksModule } from "./modules/tasks/tasks.module";
+import { DatabaseLoggerService } from "./common/loggers/database-logger.service";
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -64,6 +65,7 @@ import { TasksModule } from "./modules/tasks/tasks.module";
       provide: APP_FILTER,
       useClass: GlobalExceptionFilter,
     },
+    DatabaseLoggerService
   ],
 })
 export class AppModule {}

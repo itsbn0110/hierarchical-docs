@@ -71,7 +71,8 @@ export class NodesService {
       );
       if (!canCreate && user.role !== UserRole.ROOT_ADMIN) {
         throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.INSUFFICIENT_PERMISSIONS, 403);
-      } // Dùng hàm mới để lấy tất cả ID của Owner từ cha
+      } 
+      // Dùng hàm mới để lấy tất cả ID của Owner từ cha
       parentOwnerIds = await this.permissionsService.findOwnerIdsOfNode(parentNode._id);
       ancestors = [...parentNode.ancestors, { _id: parentNode._id, name: parentNode.name }];
       level = parentNode.level + 1; // <-- TÍNH TOÁN LEVEL MỚI
@@ -93,8 +94,9 @@ export class NodesService {
     // các ownerIds của th cha,
     parentOwnerIds.forEach((id) => ownerIdSet.add(id.toHexString())); // Thêm các owner kế thừa từ cha
 
-    const finalOwnerIds = Array.from(ownerIdSet).map((id) => new ObjectId(id)); // Dùng hàm mới để gán quyền hàng loạt
+    const finalOwnerIds = Array.from(ownerIdSet).map((id) => new ObjectId(id)); 
 
+    // Dùng hàm mới để gán quyền hàng loạt
     await this.permissionsService.grantOwnerPermissionToUsers(
       finalOwnerIds,
       newNode._id,
@@ -117,9 +119,10 @@ export class NodesService {
   }
 
   async getTreeForUser(parentId: string | null, user: User): Promise<TreeNodeDto[]> {
-    // ... (Giữ nguyên logic của hàm này)
     const parentObjectId = parentId ? new ObjectId(parentId) : null;
-    let nodes: Node[]; // --- BƯỚC 1: KIỂM TRA QUYỀN TRUY CẬP VÀO THƯ MỤC CHA ---
+    let nodes: Node[]; 
+    
+    // --- BƯỚC 1: KIỂM TRA QUYỀN TRUY CẬP VÀO THƯ MỤC CHA ---
     // (Bỏ qua nếu là Root Admin hoặc đang xem ở cấp gốc)
 
     if (user.role !== UserRole.ROOT_ADMIN && parentObjectId) {
@@ -127,19 +130,22 @@ export class NodesService {
         user,
         parentObjectId,
         PermissionLevel.VIEWER, // Chỉ cần ít nhất quyền xem
-      ); // Nếu không có quyền xem thư mục cha, ném lỗi Forbidden ngay lập tức.
+      ); 
+      
+      // Nếu không có quyền xem thư mục cha, ném lỗi Forbidden ngay lập tức.
       if (!canViewParent) {
         throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.ACCESS_DENIED, 403);
       }
-    } // --- 1. Lấy danh sách Node con mà User có quyền xem ---
-
+    } 
+    // --- 1. Lấy danh sách Node con mà User có quyền xem ---
     if (user.role === UserRole.ROOT_ADMIN) {
       nodes = await this.nodesRepository.find({ where: { parentId: parentObjectId } });
     } else {
       // Lấy tất cả các quyền của user
       const userPermissions = await this.permissionsService.findAllForUser(user._id);
-      const accessibleNodeIds = userPermissions.map((p) => p.nodeId); // Tìm các node con của parentId VÀ user có quyền truy cập
+      const accessibleNodeIds = userPermissions.map((p) => p.nodeId); 
 
+      // Tìm các node con của parentId VÀ user có quyền truy cập
       nodes = await this.nodesRepository.find({
         where: {
           parentId: parentObjectId,
@@ -162,8 +168,13 @@ export class NodesService {
 
     const treeDtos = nodes.map(async (node) => {
       const nodeIdString = node._id.toHexString();
-      const createdByUser = await this.usersService.findUserById(node.createdBy.toHexString());
 
+      let createdByUser
+
+      if (node.createdBy) {
+         createdByUser = await this.usersService.findUserById(node.createdBy.toHexString());
+      }
+      
       return plainToInstance(TreeNodeDto, {
         // Dùng plainToInstance để áp dụng decorator của DTO
         id: node._id,
@@ -172,7 +183,7 @@ export class NodesService {
         level: node.level,
         hasChildren: parentIdsWithChildren.has(nodeIdString),
         userPermission: permissionMap.get(nodeIdString) || null,
-        createdBy: createdByUser.username,
+        createdBy: node.createdBy ? createdByUser.username : "Người dùng cũ",
       });
     });
 
@@ -209,8 +220,12 @@ export class NodesService {
     }
 
     // 3. Lấy thông tin người tạo từ UsersService
-    const creator = await this.usersService.findUserById(node.createdBy.toHexString());
+    let creator = null;
 
+    if (node.createdBy) {
+      creator = await this.usersService.findUserById(node.createdBy.toHexString());
+    }
+    
     //4. Lấy quyền của người dùng hiện tại trên node này
     const currentUserPermission = await this.permissionsService.getUserPermissionForNode(user._id, nodeObjectId);
 
@@ -221,9 +236,10 @@ export class NodesService {
     // Dùng plainToInstance để đảm bảo chỉ các trường có @Expose() trong DTO mới được trả về
     const nodeDetailData = plainToInstance(NodeDetailsDto, {
       ...node, // Lấy tất cả các thuộc tính của node gốc
-      createdBy: creator ? creator.username : "N/A", // Ghi đè `createdBy` bằng username
+      createdBy: creator ? creator.username : "Người dùng cũ", // Ghi đè `createdBy` bằng username
       userPermission: currentUserPermission ? currentUserPermission.permission : null,
     });
+
 
     return nodeDetailData;
   }
@@ -334,7 +350,6 @@ export class NodesService {
     return plainToInstance(TrashedItemDto, results);
   }
 
-  // ... (Các hàm updateName, updateContent, delete, move giữ nguyên)
   async updateName(nodeId: string, dto: UpdateNodeNameDto, user: User): Promise<Node> {
     const nodeObjectId = new ObjectId(nodeId);
     const { name: newName } = dto; // 1. Tìm node và kiểm tra quyền Editor
@@ -602,8 +617,9 @@ export class NodesService {
   async move(nodeId: string, dto: MoveNodeDto, user: User): Promise<Node> {
     const { newParentId } = dto;
     const nodeToMoveId = new ObjectId(nodeId);
-    const newParentObjectId = newParentId ? new ObjectId(newParentId) : null; // --- 1. LẤY DỮ LIỆU VÀ KIỂM TRA QUYỀN BAN ĐẦU ---
-
+    const newParentObjectId = newParentId ? new ObjectId(newParentId) : null; 
+    
+    // --- 1. LẤY DỮ LIỆU VÀ KIỂM TRA QUYỀN BAN ĐẦU ---
     const [nodeToMove, newParentNode] = await Promise.all([
       this.nodesRepository.findOne({ where: { _id: nodeToMoveId } }),
       newParentObjectId ? this.nodesRepository.findOne({ where: { _id: newParentObjectId } }) : null,

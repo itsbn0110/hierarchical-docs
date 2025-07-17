@@ -6,6 +6,7 @@ export const ErrorMessages = {
   TOKEN_EXPIRED: "Phiên đăng nhập đã hết hạn",
   MUST_CHANGE_PASSWORD: "Bạn phải đổi mật khẩu trước khi có thể thực hiện các hành động khác.",
   INVALID_OLD_PASSWORD: "Mật khẩu cũ không chính xác.",
+  REFRESH_TOKEN_NOT_FOUND: "Không tìm thấy refresh_token gửi lên",
   LOGIN_FAILED: "Tên đăng nhập hoặc mật khẩu không chính xác",
 
   // User related

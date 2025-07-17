@@ -12,6 +12,7 @@ export enum ErrorCode {
   MUST_CHANGE_PASSWORD = "E1010",
   TOKEN_EXPIRED = "E1011",
   LOGIN_FAILED = "E1012",
+  REFRESH_TOKEN_NOT_FOUND = "E1013",
 
   // Node related
   NODE_NOT_FOUND = "E4001",
