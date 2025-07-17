@@ -1,13 +1,13 @@
-import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { User } from './entities/user.entity';
-import { Repository } from 'typeorm';
-import { ConfigService } from '@nestjs/config';
-import { UserRole } from 'src/common/enums/projects.enum';
-import * as bcrypt from 'bcrypt';
-import { BusinessException } from 'src/common/filters/business.exception';
-import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
-import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
+import { HttpStatus, Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { User } from "./entities/user.entity";
+import { Repository } from "typeorm";
+import { ConfigService } from "@nestjs/config";
+import { UserRole } from "src/common/enums/projects.enum";
+import * as bcrypt from "bcrypt";
+import { BusinessException } from "src/common/filters/business.exception";
+import { ErrorCode } from "src/common/filters/constants/error-codes.enum";
+import { ErrorMessages } from "src/common/filters/constants/messages.constant";
 
 @Injectable()
 export class AdminInitService implements OnModuleInit {
@@ -27,24 +27,16 @@ export class AdminInitService implements OnModuleInit {
     const existedEmail = rootAdmin?.email;
 
     if (!rootAdmin) {
-      const email = this.configService.get<string>('ROOT_ADMIN_EMAIL');
-      const username = this.configService.get<string>('ROOT_ADMIN_USERNAME');
-      const password = this.configService.get<string>('ROOT_ADMIN_PASSWORD');
+      const email = this.configService.get<string>("ROOT_ADMIN_EMAIL");
+      const username = this.configService.get<string>("ROOT_ADMIN_USERNAME");
+      const password = this.configService.get<string>("ROOT_ADMIN_PASSWORD");
 
       if (existedEmail) {
-        throw new BusinessException(
-          ErrorCode.EMAIL_ALREADY_EXISTS,
-          ErrorMessages.EMAIL_ALREADY_EXISTS,
-          HttpStatus.BAD_REQUEST,
-        );
+        throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS, ErrorMessages.EMAIL_ALREADY_EXISTS, HttpStatus.BAD_REQUEST);
       }
 
       if (!password) {
-        throw new BusinessException(
-          ErrorCode.BAD_REQUEST,
-          ErrorMessages.ROOTADMIN_ISNOT_DEFINED,
-          HttpStatus.BAD_REQUEST,
-        );
+        throw new BusinessException(ErrorCode.BAD_REQUEST, ErrorMessages.ROOTADMIN_ISNOT_DEFINED, HttpStatus.BAD_REQUEST);
       }
 
       const hashPassword = await bcrypt.hash(password, 10);
@@ -59,9 +51,9 @@ export class AdminInitService implements OnModuleInit {
       });
 
       await this.userRepository.save(user);
-      this.logger.log('Root Admin account created successfully!');
+      this.logger.log("Root Admin account created successfully!");
     } else {
-      this.logger.log('Root admin account already exists.');
+      this.logger.log("Root admin account already exists.");
     }
   }
 }

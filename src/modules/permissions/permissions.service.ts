@@ -1,27 +1,28 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { MongoRepository } from 'typeorm';
-import { ObjectId } from 'mongodb';
-import { Permission } from './entities/permission.entity';
-import { User } from '../users/entities/user.entity';
-import { ActivityAction, UserRole } from 'src/common/enums/projects.enum';
-import { PermissionLevel } from 'src/common/enums/projects.enum';
-import { GrantPermissionDto } from './dto/grant-permissions.dto';
-import { NodesService } from '../nodes/nodes.service';
-import { EmailProducerService } from '../email/email-producer.service';
-import { UsersService } from '../users/users.service';
-import { ConfigService } from '@nestjs/config';
-import { ActivityLogProducerService } from '../activity-log/activity-log-producer.service';
-import { BusinessException } from 'src/common/filters/business.exception';
-import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
-import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
-import { ActivityLog } from '../activity-log/entities/activity-log.entity';
-import { PermissionResponseDto } from './dto/permission.response.dto';
-import { plainToInstance } from 'class-transformer';
-import { ActivityLogResponseDto } from '../activity-log/dto/activity-log.response.dto';
-import { InvitePermissionDto } from './dto/invite-permission.dto';
-import { SharedNodeDto } from './dto/shared.dto';
-import { RecentItemDto } from './dto/recent.response.dto';
+import { forwardRef, Inject, Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { MongoRepository } from "typeorm";
+import { ObjectId } from "mongodb";
+import { Permission } from "./entities/permission.entity";
+import { User } from "../users/entities/user.entity";
+import { ActivityAction, UserRole } from "src/common/enums/projects.enum";
+import { PermissionLevel } from "src/common/enums/projects.enum";
+import { GrantPermissionDto } from "./dto/grant-permissions.dto";
+import { NodesService } from "../nodes/nodes.service";
+import { EmailProducerService } from "../email/email-producer.service";
+import { UsersService } from "../users/users.service";
+import { ConfigService } from "@nestjs/config";
+import { ActivityLogProducerService } from "../activity-log/activity-log-producer.service";
+import { BusinessException } from "src/common/filters/business.exception";
+import { ErrorCode } from "src/common/filters/constants/error-codes.enum";
+import { ErrorMessages } from "src/common/filters/constants/messages.constant";
+import { ActivityLog } from "../activity-log/entities/activity-log.entity";
+import { PermissionResponseDto } from "./dto/permission.response.dto";
+import { plainToInstance } from "class-transformer";
+import { ActivityLogResponseDto } from "../activity-log/dto/activity-log.response.dto";
+import { InvitePermissionDto } from "./dto/invite-permission.dto";
+import { SharedNodeDto } from "./dto/shared.dto";
+import { RecentItemDto } from "./dto/recent.response.dto";
+import { FindAllPermissionsOptions, PermissionDetailsDto } from "./dto/permission-details.dto";
 @Injectable()
 export class PermissionsService {
   constructor(
@@ -53,15 +54,15 @@ export class PermissionsService {
         {
           // Bước 2: Join với collection 'users'
           $lookup: {
-            from: 'users', // Tên collection cần join
-            localField: 'userId', // Trường trong collection 'permissions'
-            foreignField: '_id', // Trường trong collection 'users'
-            as: 'userDetails', // Tên của mảng mới chứa kết quả join
+            from: "users", // Tên collection cần join
+            localField: "userId", // Trường trong collection 'permissions'
+            foreignField: "_id", // Trường trong collection 'users'
+            as: "userDetails", // Tên của mảng mới chứa kết quả join
           },
         },
         {
           // Bước 3: "Mở" mảng userDetails (vì mỗi quyền chỉ có 1 user)
-          $unwind: '$userDetails',
+          $unwind: "$userDetails",
         },
         {
           // Bước 4: Định hình lại dữ liệu trả về cho gọn gàng
@@ -69,9 +70,10 @@ export class PermissionsService {
             _id: 1, // Giữ lại ID của bản ghi permission
             permission: 1,
             user: {
-              _id: '$userDetails._id',
-              username: '$userDetails.username',
-              email: '$userDetails.email',
+              _id: "$userDetails._id",
+              username: "$userDetails.username",
+              email: "$userDetails.email",
+              isActive: "$userDetails.isActive",
             },
           },
         },
@@ -94,19 +96,19 @@ export class PermissionsService {
           // 2. $addFields: Thêm một trường tạm 'convertedUserId'
           // bằng cách chuyển đổi trường 'userId' (string) sang ObjectId
           $addFields: {
-            convertedUserId: { $toObjectId: '$userId' },
+            convertedUserId: { $toObjectId: "$userId" },
           },
         },
         {
           // 3. $lookup: Join bằng trường ObjectId vừa được tạo
           $lookup: {
-            from: 'users',
-            localField: 'convertedUserId', // Dùng trường đã chuyển đổi
-            foreignField: '_id',
-            as: 'userDetails',
+            from: "users",
+            localField: "convertedUserId", // Dùng trường đã chuyển đổi
+            foreignField: "_id",
+            as: "userDetails",
           },
         },
-        { $unwind: '$userDetails' },
+        { $unwind: "$userDetails" },
         {
           // 4. $project: Giữ nguyên, không cần thay đổi
           $project: {
@@ -115,8 +117,8 @@ export class PermissionsService {
             details: 1,
             timestamp: 1,
             user: {
-              _id: '$userDetails._id',
-              username: '$userDetails.username',
+              _id: "$userDetails._id",
+              username: "$userDetails.username",
             },
           },
         },
@@ -127,19 +129,71 @@ export class PermissionsService {
     return plainToInstance(ActivityLogResponseDto, results);
   }
 
-  async inviteByEmail(
-    inviteDto: InvitePermissionDto,
-    granter: User,
-  ): Promise<PermissionResponseDto> {
+  async findAllPermissions(
+    options: FindAllPermissionsOptions,
+  ): Promise<{ data: PermissionDetailsDto[]; total: number }> {
+    const { page, limit, search } = options;
+    const skip = (page - 1) * limit;
+
+    const pipeline: any[] = [
+      { $sort: { grantedAt: -1 } },
+      // Join với users để lấy thông tin người được cấp quyền
+      { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "user" } },
+      // Join với nodes để lấy thông tin tài nguyên
+      { $lookup: { from: "nodes", localField: "nodeId", foreignField: "_id", as: "node" } },
+      // Join với users lần nữa để lấy thông tin người cấp quyền
+      { $lookup: { from: "users", localField: "grantedBy", foreignField: "_id", as: "grantedBy" } },
+      // Mở mảng kết quả (vì lookup trả về mảng)
+      // Thêm preserveNullAndEmptyArrays để không loại bỏ bản ghi nếu không tìm thấy kết quả join
+      { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+      { $unwind: { path: "$node", preserveNullAndEmptyArrays: true } },
+      { $unwind: { path: "$grantedBy", preserveNullAndEmptyArrays: true } },
+    ];
+
+    // Thêm bước lọc nếu có tham số tìm kiếm
+    if (search) {
+      pipeline.push({
+        $match: {
+          $or: [
+            { "user.username": { $regex: search, $options: "i" } },
+            { "user.email": { $regex: search, $options: "i" } },
+            { "node.name": { $regex: search, $options: "i" } },
+          ],
+        },
+      });
+    }
+
+    // Sử dụng $facet để thực hiện phân trang và đếm tổng số bản ghi cùng lúc
+    const results = await this.permissionRepository
+      .aggregate([
+        ...pipeline,
+        {
+          $facet: {
+            data: [{ $skip: skip }, { $limit: limit }],
+            totalCount: [{ $count: "count" }],
+          },
+        },
+      ])
+      .next();
+
+    const rawData = results?.data || [];
+    const total = results?.totalCount[0]?.count || 0;
+
+    // SỬA LỖI: Tách biệt các bước và khai báo kiểu tường minh để giúp TypeScript hiểu đúng.
+    const data = rawData.map((item) => plainToInstance(PermissionDetailsDto, item));
+
+    return {
+      data,
+      total,
+    };
+  }
+
+  async inviteByEmail(inviteDto: InvitePermissionDto, granter: User): Promise<PermissionResponseDto> {
     const { email, nodeId, permission } = inviteDto;
 
-    const targetUser = await this.usersService.findByEmail(email);
+    const targetUser = await this.usersService.findUserByEmail(email);
     if (!targetUser) {
-      throw new BusinessException(
-        ErrorCode.USER_NOT_FOUND,
-        `Người dùng với email '${email}' không tồn tại.`,
-        404,
-      );
+      throw new BusinessException(ErrorCode.USER_NOT_FOUND, `Người dùng với email '${email}' không tồn tại.`, 404);
     }
 
     // Tạo một GrantPermissionDto để tái sử dụng logic của hàm grant()
@@ -158,10 +212,7 @@ export class PermissionsService {
     });
   }
 
-  async getUserPermissionForNode(
-    userId: ObjectId,
-    nodeObjectId: ObjectId,
-  ): Promise<Permission | null> {
+  async getUserPermissionForNode(userId: ObjectId, nodeObjectId: ObjectId): Promise<Permission | null> {
     // Tìm permission của user trên node cụ thể
     const permission = await this.permissionRepository.findOne({
       where: { userId, nodeId: nodeObjectId },
@@ -251,26 +302,14 @@ export class PermissionsService {
     // ===== BƯỚC SỬA LỖI - THÊM VÀO ĐÂY =====
     // Quy tắc: Ngăn chặn người dùng tự thay đổi quyền của chính mình.
     if (targetUserId.equals(granterId)) {
-      throw new BusinessException(
-        ErrorCode.ACCESS_DENIED,
-        ErrorMessages.CANNOT_CHANGE_OWN_PERMISSION,
-        403,
-      );
+      throw new BusinessException(ErrorCode.ACCESS_DENIED, ErrorMessages.CANNOT_CHANGE_OWN_PERMISSION, 403);
     }
 
     // --- 1. KIỂM TRA QUYỀN CỦA NGƯỜI ĐI CẤP QUYỀN ---
     // Chỉ Owner hoặc Root Admin mới có quyền cấp quyền cho người khác
-    const havePermission = await this.checkUserPermissionForNode(
-      granter,
-      targetNodeId,
-      PermissionLevel.EDITOR,
-    );
+    const havePermission = await this.checkUserPermissionForNode(granter, targetNodeId, PermissionLevel.EDITOR);
     if (!havePermission) {
-      throw new BusinessException(
-        ErrorCode.ACCESS_DENIED,
-        ErrorMessages.INSUFFICIENT_PERMISSIONS,
-        403,
-      );
+      throw new BusinessException(ErrorCode.ACCESS_DENIED, ErrorMessages.INSUFFICIENT_PERMISSIONS, 403);
     }
 
     // --- 2. KIỂM TRA XEM PERMISSION ĐÃ TỒN TẠI CHƯA ---
@@ -281,11 +320,7 @@ export class PermissionsService {
     // Nếu người bị tác động đã là Owner, chỉ có RootAdmin mới được phép thay đổi
     if (existingPermission && existingPermission.permission === PermissionLevel.OWNER) {
       if (granter.role !== UserRole.ROOT_ADMIN) {
-        throw new BusinessException(
-          ErrorCode.ACCESS_DENIED,
-          ErrorMessages.CANNOT_CHANGE_OTHER_OWNER,
-          403,
-        );
+        throw new BusinessException(ErrorCode.ACCESS_DENIED, ErrorMessages.CANNOT_CHANGE_OTHER_OWNER, 403);
       }
     }
 
@@ -308,8 +343,8 @@ export class PermissionsService {
       // --- THÊM LOGIC GỬI EMAIL THÔNG BÁO ---
       try {
         const [targetUser, node] = await Promise.all([
-          this.usersService.findById(targetUserId.toHexString()),
-          this.nodesService.findById(targetNodeId),
+          this.usersService.findUserById(targetUserId.toHexString()),
+          this.nodesService.findNodeById(targetNodeId),
         ]);
 
         if (targetUser && node) {
@@ -318,7 +353,7 @@ export class PermissionsService {
             granterName: granter.username,
             nodeName: node.name,
             permissionLevel: savedPermission.permission,
-            loginUrl: this.configService.get<string>('FRONTEND_URL'),
+            loginUrl: this.configService.get<string>("FRONTEND_URL"),
           });
         }
 
@@ -355,26 +390,14 @@ export class PermissionsService {
       where: { _id: permissionObjectId },
     });
     if (!permissionToRevoke) {
-      throw new BusinessException(
-        ErrorCode.PERMISSION_NOT_FOUND,
-        ErrorMessages.PERMISSION_NOT_FOUND,
-        404,
-      );
+      throw new BusinessException(ErrorCode.PERMISSION_NOT_FOUND, ErrorMessages.PERMISSION_NOT_FOUND, 404);
     }
 
     // --- 2. KIỂM TRA QUYỀN CỦA NGƯỜI ĐI THU HỒI ---
     // Chỉ Owner của Node đó (hoặc RootAdmin) mới có quyền thu hồi quyền của người khác
-    const canRevoke = await this.checkUserPermissionForNode(
-      revoker,
-      permissionToRevoke.nodeId,
-      PermissionLevel.EDITOR,
-    );
+    const canRevoke = await this.checkUserPermissionForNode(revoker, permissionToRevoke.nodeId, PermissionLevel.EDITOR);
     if (!canRevoke) {
-      throw new BusinessException(
-        ErrorCode.ACCESS_DENIED,
-        ErrorMessages.INSUFFICIENT_PERMISSIONS,
-        403,
-      );
+      throw new BusinessException(ErrorCode.ACCESS_DENIED, ErrorMessages.INSUFFICIENT_PERMISSIONS, 403);
     }
 
     // --- 3. ÁP DỤNG CÁC QUY TẮC THU HỒI MỚI ---
@@ -385,17 +408,13 @@ export class PermissionsService {
     if (isRevokingOwner) {
       // Quy tắc 3a: Chỉ RootAdmin mới có quyền thu hồi quyền OWNER
       if (!isRevokerRootAdmin) {
-        throw new BusinessException(
-          ErrorCode.ACCESS_DENIED,
-          ErrorMessages.CANNOT_REVOKE_OTHER_OWNER,
-          403,
-        );
+        throw new BusinessException(ErrorCode.ACCESS_DENIED, ErrorMessages.CANNOT_REVOKE_OTHER_OWNER, 403);
       }
     }
 
     // --- 4. GHI LOG VÀ THỰC HIỆN XÓA ---
-    const node = await this.nodesService.findById(permissionToRevoke.nodeId);
-    const targetUser = await this.usersService.findById(permissionToRevoke.userId.toHexString());
+    const node = await this.nodesService.findNodeById(permissionToRevoke.nodeId);
+    const targetUser = await this.usersService.findUserById(permissionToRevoke.userId.toHexString());
     await this.activityLogProducer.logActivity({
       userId: revoker._id,
       action: ActivityAction.PERMISSION_REVOKED,
@@ -425,34 +444,34 @@ export class PermissionsService {
         // 2. Join với collection 'nodes' để lấy thông tin của file/folder
         {
           $lookup: {
-            from: 'nodes',
-            localField: 'nodeId',
-            foreignField: '_id',
-            as: 'nodeDetails',
+            from: "nodes",
+            localField: "nodeId",
+            foreignField: "_id",
+            as: "nodeDetails",
           },
         },
         // 3. Mở mảng nodeDetails (mỗi quyền chỉ có 1 node)
-        { $unwind: '$nodeDetails' },
+        { $unwind: "$nodeDetails" },
         // 4. Join với collection 'users' để tìm người đã tạo ra node đó (chủ sở hữu)
         {
           $lookup: {
-            from: 'users',
-            localField: 'nodeDetails.createdBy',
-            foreignField: '_id',
-            as: 'ownerDetails',
+            from: "users",
+            localField: "nodeDetails.createdBy",
+            foreignField: "_id",
+            as: "ownerDetails",
           },
         },
         // 5. Mở mảng ownerDetails
-        { $unwind: '$ownerDetails' },
+        { $unwind: "$ownerDetails" },
         // 6. Định dạng lại dữ liệu trả về
         {
           $project: {
-            _id: '$nodeDetails._id', // ID của node
-            name: '$nodeDetails.name',
-            type: '$nodeDetails.type',
-            yourPermission: '$permission', // Quyền của bạn trên node này
-            sharedBy: '$ownerDetails.username', // Người đã chia sẻ (chủ sở hữu)
-            sharedAt: '$grantedAt', // Ngày được cấp quyền
+            _id: "$nodeDetails._id", // ID của node
+            name: "$nodeDetails.name",
+            type: "$nodeDetails.type",
+            yourPermission: "$permission", // Quyền của bạn trên node này
+            sharedBy: "$ownerDetails.username", // Người đã chia sẻ (chủ sở hữu)
+            sharedAt: "$grantedAt", // Ngày được cấp quyền
           },
         },
         { $sort: { sharedAt: -1 } }, // Sắp xếp theo ngày chia sẻ mới nhất
@@ -471,7 +490,7 @@ export class PermissionsService {
         nodeId: nodeId,
         permission: PermissionLevel.OWNER,
       },
-      select: ['userId'],
+      select: ["userId"],
     });
 
     return permissions.map((p) => p.userId);
@@ -480,24 +499,26 @@ export class PermissionsService {
   /**
    * CẤP QUYỀN OWNER HÀNG LOẠT CHO NHIỀU USER
    */
-  async grantOwnerPermissionToUsers(
-    userIds: ObjectId[],
-    nodeId: ObjectId,
-    granterId: ObjectId,
-  ): Promise<void> {
-    const newPermissions: Partial<Permission>[] = userIds.map((userId: ObjectId) => ({
-      userId: userId,
-      nodeId: nodeId,
-      permission: PermissionLevel.OWNER,
-      grantedBy: granterId,
-      grantedAt: new Date(),
+  async grantOwnerPermissionToUsers(userIds: ObjectId[], nodeId: ObjectId, granterId: ObjectId): Promise<void> {
+    if (!userIds || userIds.length === 0) {
+      return;
+    }
+
+    const operations = userIds.map((userId) => ({
+      updateOne: {
+        filter: { userId: userId, nodeId: nodeId },
+        update: {
+          $set: {
+            permission: PermissionLevel.OWNER,
+            grantedBy: granterId,
+            grantedAt: new Date(),
+          },
+        },
+        upsert: true,
+      },
     }));
 
-    if (newPermissions.length > 0) {
-      // Dùng upsert để tránh tạo bản ghi trùng lặp nếu đã có
-      // (Tuy nhiên, để đơn giản, insertMany cũng đã đủ tốt ở bước này)
-      await this.permissionRepository.insertMany(newPermissions);
-    }
+    await this.permissionRepository.bulkWrite(operations);
   }
 
   /**
@@ -527,7 +548,7 @@ export class PermissionsService {
     // 3. Kết hợp node cha (đã là ObjectId) và các node con
     const allNodeIds = [parentObjectId, ...descendantNodes.map((n) => n._id)];
 
-    console.log('allNodeIds:', allNodeIds);
+    console.log("allNodeIds:", allNodeIds);
     // 4. Dùng bulkWrite để cấp quyền hàng loạt một cách hiệu quả
     const operations = allNodeIds.map((nodeId) => ({
       updateOne: {
@@ -550,12 +571,10 @@ export class PermissionsService {
 
   async updateLastAccessed(userId: ObjectId, nodeId: ObjectId): Promise<void> {
     // Không cần chờ (await) để không làm chậm request chính của người dùng
-    this.permissionRepository
-      .updateOne({ userId, nodeId }, { $set: { lastAccessedAt: new Date() } })
-      .catch((err) => {
-        // Ghi log lỗi nếu có nhưng không làm ảnh hưởng đến luồng chính
-        console.error(`Failed to update lastAccessedAt for user ${userId} on node ${nodeId}`, err);
-      });
+    this.permissionRepository.updateOne({ userId, nodeId }, { $set: { lastAccessedAt: new Date() } }).catch((err) => {
+      // Ghi log lỗi nếu có nhưng không làm ảnh hưởng đến luồng chính
+      console.error(`Failed to update lastAccessedAt for user ${userId} on node ${nodeId}`, err);
+    });
   }
 
   async findRecentForUser(currentUser: User): Promise<RecentItemDto[]> {
@@ -575,31 +594,31 @@ export class PermissionsService {
         // 4. Join với 'nodes' để lấy thông tin
         {
           $lookup: {
-            from: 'nodes',
-            localField: 'nodeId',
-            foreignField: '_id',
-            as: 'nodeInfo',
+            from: "nodes",
+            localField: "nodeId",
+            foreignField: "_id",
+            as: "nodeInfo",
           },
         },
-        { $unwind: '$nodeInfo' },
+        { $unwind: "$nodeInfo" },
         // 5. Join với 'users' để lấy tên chủ sở hữu
         {
           $lookup: {
-            from: 'users',
-            localField: 'nodeInfo.createdBy',
-            foreignField: '_id',
-            as: 'ownerInfo',
+            from: "users",
+            localField: "nodeInfo.createdBy",
+            foreignField: "_id",
+            as: "ownerInfo",
           },
         },
-        { $unwind: '$ownerInfo' },
+        { $unwind: "$ownerInfo" },
         // 6. Định dạng lại dữ liệu
         {
           $project: {
-            _id: '$nodeInfo._id',
-            name: '$nodeInfo.name',
-            type: '$nodeInfo.type',
-            owner: '$ownerInfo.username',
-            lastAccessedAt: '$lastAccessedAt',
+            _id: "$nodeInfo._id",
+            name: "$nodeInfo.name",
+            type: "$nodeInfo.type",
+            owner: "$ownerInfo.username",
+            lastAccessedAt: "$lastAccessedAt",
           },
         },
       ])

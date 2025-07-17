@@ -1,31 +1,29 @@
-// src/nodes/nodes.service.ts
+import { Injectable, Inject, forwardRef } from "@nestjs/common";
+import { InjectConnection, InjectRepository } from "@nestjs/typeorm";
+import { Connection, In, IsNull, MongoRepository, Not } from "typeorm";
+import { ObjectId } from "mongodb";
 
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
-import { InjectConnection, InjectRepository } from '@nestjs/typeorm';
-import { Connection, In, IsNull, MongoRepository, Not } from 'typeorm';
-import { ObjectId } from 'mongodb';
-
-import { Node } from './entities/node.entity';
-import { CreateNodeDto } from './dto/create-node.dto';
-import { User } from '../users/entities/user.entity';
-import { ActivityAction, NodeType, UserRole } from 'src/common/enums/projects.enum';
-import { PermissionLevel } from 'src/common/enums/projects.enum';
-import { PermissionsService } from '../permissions/permissions.service';
-import { TreeNodeDto } from './dto/tree-node.dto';
-import { plainToInstance } from 'class-transformer';
-import { UpdateNodeNameDto } from './dto/update-node-name.dto';
-import { UpdateNodeContentDto } from './dto/update-node-content.dto';
-import { Permission } from '../permissions/entities/permission.entity';
-import { AccessRequest } from '../access-requests/entities/access-request.entity';
-import { ActivityLogProducerService } from '../activity-log/activity-log-producer.service';
-import { MoveNodeDto } from './dto/move-node.dto';
-import { BusinessException } from 'src/common/filters/business.exception';
-import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
-import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
-import { UsersService } from '../users/users.service';
-import { NodeDetailsDto } from './dto/node-details-dto';
-import { TrashedItemDto } from './dto/trashed-item.dto';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Node } from "./entities/node.entity";
+import { CreateNodeDto } from "./dto/create-node.dto";
+import { User } from "../users/entities/user.entity";
+import { ActivityAction, NodeType, UserRole } from "src/common/enums/projects.enum";
+import { PermissionLevel } from "src/common/enums/projects.enum";
+import { PermissionsService } from "../permissions/permissions.service";
+import { TreeNodeDto } from "./dto/tree-node.dto";
+import { plainToInstance } from "class-transformer";
+import { UpdateNodeNameDto } from "./dto/update-node-name.dto";
+import { UpdateNodeContentDto } from "./dto/update-node-content.dto";
+import { Permission } from "../permissions/entities/permission.entity";
+import { AccessRequest } from "../access-requests/entities/access-request.entity";
+import { ActivityLogProducerService } from "../activity-log/activity-log-producer.service";
+import { MoveNodeDto } from "./dto/move-node.dto";
+import { BusinessException } from "src/common/filters/business.exception";
+import { ErrorMessages } from "src/common/filters/constants/messages.constant";
+import { ErrorCode } from "src/common/filters/constants/error-codes.enum";
+import { UsersService } from "../users/users.service";
+import { NodeDetailsDto } from "./dto/node-details-dto";
+import { TrashedItemDto } from "./dto/trashed-item.dto";
+import { Cron, CronExpression } from "@nestjs/schedule";
 
 type Ancestor = {
   _id: ObjectId;
@@ -64,11 +62,7 @@ export class NodesService {
         throw new BusinessException(ErrorCode.NODE_NOT_FOUND, ErrorMessages.FOLDER_NOT_FOUND, 404);
       }
       if (parentNode.type !== NodeType.FOLDER) {
-        throw new BusinessException(
-          ErrorCode.NODE_INVALID_TYPE,
-          ErrorMessages.INVALID_DOCUMENT_TYPE,
-          400,
-        );
+        throw new BusinessException(ErrorCode.NODE_INVALID_TYPE, ErrorMessages.INVALID_DOCUMENT_TYPE, 400);
       }
       const canCreate = await this.permissionsService.checkUserPermissionForNode(
         user,
@@ -76,11 +70,7 @@ export class NodesService {
         PermissionLevel.EDITOR,
       );
       if (!canCreate && user.role !== UserRole.ROOT_ADMIN) {
-        throw new BusinessException(
-          ErrorCode.NODE_FORBIDDEN,
-          ErrorMessages.INSUFFICIENT_PERMISSIONS,
-          403,
-        );
+        throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.INSUFFICIENT_PERMISSIONS, 403);
       } // Dùng hàm mới để lấy tất cả ID của Owner từ cha
       parentOwnerIds = await this.permissionsService.findOwnerIdsOfNode(parentNode._id);
       ancestors = [...parentNode.ancestors, { _id: parentNode._id, name: parentNode.name }];
@@ -161,15 +151,12 @@ export class NodesService {
 
     const nodeIds = nodes.map((n) => n._id); // Query để tìm những node nào trong danh sách trên có con
 
-    const nodesWithChildren = await this.nodesRepository.distinct('parentId', {
+    const nodesWithChildren = await this.nodesRepository.distinct("parentId", {
       parentId: { $in: nodeIds },
     });
     const parentIdsWithChildren = new Set(nodesWithChildren.map((id) => id.toHexString())); // Lấy quyền chi tiết của user trên các node này
 
-    const permissions = await this.permissionsService.findUserPermissionsForNodes(
-      user._id,
-      nodeIds,
-    );
+    const permissions = await this.permissionsService.findUserPermissionsForNodes(user._id, nodeIds);
     const permissionMap = new Map<string, PermissionLevel>();
     permissions.forEach((p) => permissionMap.set(p.nodeId.toHexString(), p.permission)); // --- 3. Chuyển đổi sang DTO để trả về ---
 
@@ -210,11 +197,7 @@ export class NodesService {
         PermissionLevel.VIEWER,
       );
       if (!canView) {
-        throw new BusinessException(
-          ErrorCode.NODE_FORBIDDEN,
-          ErrorMessages.INSUFFICIENT_PERMISSIONS,
-          403,
-        );
+        throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.INSUFFICIENT_PERMISSIONS, 403);
       }
     }
 
@@ -226,13 +209,10 @@ export class NodesService {
     }
 
     // 3. Lấy thông tin người tạo từ UsersService
-    const creator = await this.usersService.findById(node.createdBy.toHexString());
+    const creator = await this.usersService.findUserById(node.createdBy.toHexString());
 
     //4. Lấy quyền của người dùng hiện tại trên node này
-    const currentUserPermission = await this.permissionsService.getUserPermissionForNode(
-      user._id,
-      nodeObjectId,
-    );
+    const currentUserPermission = await this.permissionsService.getUserPermissionForNode(user._id, nodeObjectId);
 
     // 5. Cập nhật trường lastAccessedAt
     this.permissionsService.updateLastAccessed(user._id, nodeObjectId);
@@ -241,7 +221,7 @@ export class NodesService {
     // Dùng plainToInstance để đảm bảo chỉ các trường có @Expose() trong DTO mới được trả về
     const nodeDetailData = plainToInstance(NodeDetailsDto, {
       ...node, // Lấy tất cả các thuộc tính của node gốc
-      createdBy: creator ? creator.username : 'N/A', // Ghi đè `createdBy` bằng username
+      createdBy: creator ? creator.username : "N/A", // Ghi đè `createdBy` bằng username
       userPermission: currentUserPermission ? currentUserPermission.permission : null,
     });
 
@@ -266,33 +246,33 @@ export class NodesService {
         },
         {
           $lookup: {
-            from: 'nodes',
-            localField: 'parentId',
-            foreignField: '_id',
-            as: 'parentDetails',
+            from: "nodes",
+            localField: "parentId",
+            foreignField: "_id",
+            as: "parentDetails",
           },
         },
         {
           $match: {
-            $or: [{ parentDetails: [] }, { 'parentDetails.deletedAt': null }],
+            $or: [{ parentDetails: [] }, { "parentDetails.deletedAt": null }],
           },
         },
         {
           $lookup: {
-            from: 'users',
-            localField: 'createdBy',
-            foreignField: '_id',
-            as: 'ownerInfo',
+            from: "users",
+            localField: "createdBy",
+            foreignField: "_id",
+            as: "ownerInfo",
           },
         },
-        { $unwind: { path: '$ownerInfo', preserveNullAndEmptyArrays: true } },
+        { $unwind: { path: "$ownerInfo", preserveNullAndEmptyArrays: true } },
         {
           $project: {
             _id: 1,
             name: 1,
             type: 1,
             deletedAt: 1,
-            owner: '$ownerInfo.username',
+            owner: "$ownerInfo.username",
           },
         },
         { $sort: { deletedAt: -1 } },
@@ -301,6 +281,59 @@ export class NodesService {
 
     return plainToInstance(TrashedItemDto, results);
   }
+
+  async findAllTrashedNodesForAdmin(): Promise<TrashedItemDto[]> {
+    // Pipeline này tương tự như `findTrashedNodes` nhưng không lọc theo owner.
+    const results = await this.nodesRepository
+      .aggregate([
+        // Bước 1: Lấy tất cả các node có `deletedAt` (đang trong thùng rác)
+        {
+          $match: {
+            deletedAt: { $ne: null },
+          },
+        },
+        // Bước 2: Kiểm tra xem thư mục cha của chúng có bị xóa không.
+        // Nếu cha cũng bị xóa, không hiển thị mục con này (vì nó sẽ được khôi phục/xóa cùng cha)
+        {
+          $lookup: {
+            from: "nodes",
+            localField: "parentId",
+            foreignField: "_id",
+            as: "parentDetails",
+          },
+        },
+        {
+          $match: {
+            $or: [{ parentDetails: [] }, { "parentDetails.deletedAt": null }],
+          },
+        },
+        // Bước 3: Lấy thông tin người tạo để hiển thị cột "Chủ sở hữu"
+        {
+          $lookup: {
+            from: "users",
+            localField: "createdBy",
+            foreignField: "_id",
+            as: "ownerInfo",
+          },
+        },
+        { $unwind: { path: "$ownerInfo", preserveNullAndEmptyArrays: true } },
+        // Bước 4: Định hình dữ liệu trả về
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            type: 1,
+            deletedAt: 1,
+            owner: "$ownerInfo.username", // Lấy username của chủ sở hữu
+          },
+        },
+        { $sort: { deletedAt: -1 } },
+      ])
+      .toArray();
+
+    return plainToInstance(TrashedItemDto, results);
+  }
+
   // ... (Các hàm updateName, updateContent, delete, move giữ nguyên)
   async updateName(nodeId: string, dto: UpdateNodeNameDto, user: User): Promise<Node> {
     const nodeObjectId = new ObjectId(nodeId);
@@ -316,11 +349,7 @@ export class NodesService {
       PermissionLevel.EDITOR,
     );
     if (!canEdit) {
-      throw new BusinessException(
-        ErrorCode.NODE_FORBIDDEN,
-        ErrorMessages.INSUFFICIENT_PERMISSIONS,
-        403,
-      );
+      throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.INSUFFICIENT_PERMISSIONS, 403);
     } // 2. Cập nhật tên của chính node đó
 
     const oldName = nodeToUpdate.name; // Lưu lại tên cũ để ghi log
@@ -329,8 +358,8 @@ export class NodesService {
 
     if (nodeToUpdate.type === NodeType.FOLDER) {
       await this.nodesRepository.updateMany(
-        { 'ancestors._id': nodeObjectId },
-        { $set: { 'ancestors.$.name': newName } },
+        { "ancestors._id": nodeObjectId },
+        { $set: { "ancestors.$.name": newName } },
       );
     }
 
@@ -360,11 +389,7 @@ export class NodesService {
     } // 2. KIỂM TRA ĐIỀU KIỆN: Chỉ cho phép update content của FILE
 
     if (nodeToUpdate.type !== NodeType.FILE) {
-      throw new BusinessException(
-        ErrorCode.NODE_INVALID_TYPE,
-        ErrorMessages.INVALID_DOCUMENT_TYPE,
-        400,
-      );
+      throw new BusinessException(ErrorCode.NODE_INVALID_TYPE, ErrorMessages.INVALID_DOCUMENT_TYPE, 400);
     } // 3. Kiểm tra quyền Editor
 
     const canEdit = await this.permissionsService.checkUserPermissionForNode(
@@ -373,11 +398,7 @@ export class NodesService {
       PermissionLevel.EDITOR,
     );
     if (!canEdit) {
-      throw new BusinessException(
-        ErrorCode.NODE_FORBIDDEN,
-        ErrorMessages.INSUFFICIENT_PERMISSIONS,
-        403,
-      );
+      throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.INSUFFICIENT_PERMISSIONS, 403);
     } // 4. Cập nhật và lưu
 
     nodeToUpdate.content = dto.content;
@@ -400,15 +421,11 @@ export class NodesService {
       PermissionLevel.OWNER,
     );
     if (!isOwner) {
-      throw new BusinessException(
-        ErrorCode.NODE_FORBIDDEN,
-        ErrorMessages.ONLY_OWNER_CAN_DELETE,
-        403,
-      );
+      throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.ONLY_OWNER_CAN_DELETE, 403);
     }
 
     const descendants = await this.nodesRepository.find({
-      where: { 'ancestors._id': nodeObjectId },
+      where: { "ancestors._id": nodeObjectId },
       withDeleted: true,
     });
     const idsToDelete = [nodeToDelete._id, ...descendants.map((d) => d._id)];
@@ -452,15 +469,11 @@ export class NodesService {
       PermissionLevel.OWNER,
     );
     if (!isOwner) {
-      throw new BusinessException(
-        ErrorCode.NODE_FORBIDDEN,
-        ErrorMessages.ONLY_OWNER_CAN_DELETE,
-        403,
-      );
+      throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.ONLY_OWNER_CAN_DELETE, 403);
     }
 
     const descendants = await this.nodesRepository.find({
-      where: { 'ancestors._id': nodeObjectId, deletedAt: null },
+      where: { "ancestors._id": nodeObjectId, deletedAt: null },
     });
     const idsToSoftDelete = [nodeToDelete._id, ...descendants.map((d) => d._id)];
     const deletionDate = new Date();
@@ -487,7 +500,7 @@ export class NodesService {
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async handleEmptyTrashCron() {
-    this.logger.log('Bắt đầu tác vụ tự động dọn dẹp thùng rác...');
+    this.logger.log("Bắt đầu tác vụ tự động dọn dẹp thùng rác...");
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -501,7 +514,7 @@ export class NodesService {
     });
 
     if (oldItems.length === 0) {
-      this.logger.log('Không có mục nào cũ cần xóa.');
+      this.logger.log("Không có mục nào cũ cần xóa.");
       return;
     }
 
@@ -516,7 +529,7 @@ export class NodesService {
       }
     }
 
-    this.logger.log('Đã hoàn tất tác vụ dọn dẹp thùng rác.');
+    this.logger.log("Đã hoàn tất tác vụ dọn dẹp thùng rác.");
   }
 
   /**
@@ -524,7 +537,7 @@ export class NodesService {
    */
   private async _deletePermanentlyInternal(nodeId: ObjectId): Promise<{ deletedCount: number }> {
     const descendants = await this.nodesRepository.find({
-      where: { 'ancestors._id': nodeId },
+      where: { "ancestors._id": nodeId },
       withDeleted: true,
     });
     const idsToDelete = [nodeId, ...descendants.map((d) => d._id)];
@@ -551,24 +564,16 @@ export class NodesService {
     });
 
     if (!nodeToRestore || !nodeToRestore.deletedAt) {
-      throw new BusinessException(ErrorCode.NODE_NOT_FOUND, 'Mục không có trong thùng rác.', 404);
+      throw new BusinessException(ErrorCode.NODE_NOT_FOUND, "Mục không có trong thùng rác.", 404);
     }
 
-    const isOwner = await this.permissionsService.checkUserPermissionForNode(
-      user,
-      nodeObjectId,
-      PermissionLevel.OWNER,
-    );
+    const isOwner = await this.permissionsService.checkUserPermissionForNode(user, nodeObjectId, PermissionLevel.OWNER);
     if (!isOwner) {
-      throw new BusinessException(
-        ErrorCode.NODE_FORBIDDEN,
-        'Bạn không có quyền khôi phục mục này.',
-        403,
-      );
+      throw new BusinessException(ErrorCode.NODE_FORBIDDEN, "Bạn không có quyền khôi phục mục này.", 403);
     }
 
     const descendants = await this.nodesRepository.find({
-      where: { 'ancestors._id': nodeObjectId, deletedAt: nodeToRestore.deletedAt },
+      where: { "ancestors._id": nodeObjectId, deletedAt: nodeToRestore.deletedAt },
       withDeleted: true,
     });
     const idsToRestore = [nodeToRestore._id, ...descendants.map((d) => d._id)];
@@ -601,45 +606,35 @@ export class NodesService {
 
     const [nodeToMove, newParentNode] = await Promise.all([
       this.nodesRepository.findOne({ where: { _id: nodeToMoveId } }),
-      newParentObjectId
-        ? this.nodesRepository.findOne({ where: { _id: newParentObjectId } })
-        : null,
+      newParentObjectId ? this.nodesRepository.findOne({ where: { _id: newParentObjectId } }) : null,
     ]);
-    if (!nodeToMove)
-      throw new BusinessException(ErrorCode.NODE_NOT_FOUND, ErrorMessages.DOCUMENT_NOT_FOUND, 404);
+    if (!nodeToMove) throw new BusinessException(ErrorCode.NODE_NOT_FOUND, ErrorMessages.DOCUMENT_NOT_FOUND, 404);
+
     if (newParentId && !newParentNode)
       throw new BusinessException(ErrorCode.NODE_NOT_FOUND, ErrorMessages.FOLDER_NOT_FOUND, 404);
+
     if (newParentNode?.type !== NodeType.FOLDER) {
-      throw new BusinessException(
-        ErrorCode.NODE_INVALID_TYPE,
-        ErrorMessages.INVALID_DOCUMENT_TYPE,
-        400,
-      );
+      throw new BusinessException(ErrorCode.NODE_INVALID_TYPE, ErrorMessages.INVALID_DOCUMENT_TYPE, 400);
     } // Kiểm tra quyền trên node bị di chuyển (phải là Owner)
+
     const canMove = await this.permissionsService.checkUserPermissionForNode(
       user,
       nodeToMove._id,
       PermissionLevel.OWNER,
     );
-    if (!canMove)
-      throw new BusinessException(
-        ErrorCode.NODE_FORBIDDEN,
-        ErrorMessages.ONLY_OWNER_CAN_REVOKE,
-        403,
-      ); // Kiểm tra quyền trên thư mục đích (phải là Editor)
+
+    if (!canMove) throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.ONLY_OWNER_CAN_REVOKE, 403); // Kiểm tra quyền trên thư mục đích (phải là Editor)
+
     if (newParentNode) {
       const canDrop = await this.permissionsService.checkUserPermissionForNode(
         user,
         newParentNode._id,
         PermissionLevel.EDITOR,
       );
-      if (!canDrop)
-        throw new BusinessException(
-          ErrorCode.NODE_FORBIDDEN,
-          ErrorMessages.INSUFFICIENT_PERMISSIONS,
-          403,
-        );
-    } // --- 2. NGĂN CHẶN DI CHUYỂN VÒNG LẶP ---
+      if (!canDrop) throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.INSUFFICIENT_PERMISSIONS, 403);
+    }
+
+    // --- 2. NGĂN CHẶN DI CHUYỂN VÒNG LẶP ---
     if (newParentNode) {
       const isMovingIntoSelfOrDescendant =
         newParentNode._id.equals(nodeToMoveId) ||
@@ -647,7 +642,7 @@ export class NodesService {
       if (isMovingIntoSelfOrDescendant) {
         throw new BusinessException(
           ErrorCode.NODE_CANNOT_MOVE,
-          'Không thể di chuyển một thư mục vào chính nó hoặc thư mục con của nó.',
+          "Không thể di chuyển một thư mục vào chính nó hoặc thư mục con của nó.",
           400,
         );
       }
@@ -669,7 +664,7 @@ export class NodesService {
       ); // Cập nhật tất cả con cháu nếu node được di chuyển là một thư mục
 
       if (nodeToMove.type === NodeType.FOLDER) {
-        const descendants = await nodeRepo.find({ where: { 'ancestors._id': nodeToMoveId } });
+        const descendants = await nodeRepo.find({ where: { "ancestors._id": nodeToMoveId } });
         if (descendants.length > 0) {
           const bulkUpdateOps = descendants.map((descendant) => {
             // Xây dựng lại mảng ancestors mới cho từng con cháu
@@ -691,7 +686,7 @@ export class NodesService {
       } // --- 5. TÍNH TOÁN VÀ CẬP NHẬT LẠI QUYỀN OWNER KẾ THỪA ---
 
       const nodesToUpdatePermissions = await nodeRepo.find({
-        where: { $or: [{ _id: nodeToMoveId }, { 'ancestors._id': nodeToMoveId }] },
+        where: { $or: [{ _id: nodeToMoveId }, { "ancestors._id": nodeToMoveId }] },
       });
       const newParentOwnerIds = newParentNode
         ? await this.permissionsService.findOwnerIdsOfNode(newParentNode._id)
@@ -706,9 +701,7 @@ export class NodesService {
         }); // Gán lại quyền Owner mới từ cha
         // Lọc ra những owner mới mà chưa phải là người tạo gốc
 
-        const ownersToGrant = newParentOwnerIds.filter(
-          (ownerId) => !ownerId.equals(node.createdBy),
-        );
+        const ownersToGrant = newParentOwnerIds.filter((ownerId) => !ownerId.equals(node.createdBy));
         if (ownersToGrant.length > 0) {
           const grantPermissions = ownersToGrant.map((ownerId) => ({
             userId: ownerId,
@@ -724,7 +717,7 @@ export class NodesService {
 
     const movedNode = await this.nodesRepository.findOne({ where: { _id: nodeToMoveId } });
 
-    console.log('Chuẩn bị ghi log hoạt động...');
+    console.log("Chuẩn bị ghi log hoạt động...");
     await this.activityLogProducer.logActivity({
       userId: user._id,
       action: ActivityAction.NODE_MOVED,
@@ -738,11 +731,11 @@ export class NodesService {
         movedAt: new Date(),
       },
     }); // Trả về node đã được cập nhật thành công
-    console.log('Đã ghi log hoạt động thành công!');
+    console.log("Đã ghi log hoạt động thành công!");
 
     return movedNode;
   }
-  async findById(nodeId: ObjectId): Promise<Node | null> {
+  async findNodeById(nodeId: ObjectId): Promise<Node | null> {
     return this.nodesRepository.findOne({ where: { _id: new ObjectId(nodeId) } });
   }
 
@@ -753,7 +746,7 @@ export class NodesService {
 
     // Bước 2: Thực hiện truy vấn với kiểu dữ liệu đã được đảm bảo
     return this.nodesRepository.find({
-      where: { 'ancestors._id': parentObjectId },
+      where: { "ancestors._id": parentObjectId },
     });
   }
 }

@@ -1,5 +1,5 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { DataSource } from "typeorm";
 
 @Injectable()
 export class DatabaseLoggerService implements OnModuleInit {
@@ -9,9 +9,9 @@ export class DatabaseLoggerService implements OnModuleInit {
 
   onModuleInit() {
     if (this.dataSource.isInitialized) {
-      this.logger.log('Database connection established successfully!');
+      this.logger.log("Database connection established successfully!");
     } else {
-      this.logger.error('Database connection failed to initialize.');
+      this.logger.error("Database connection failed to initialize.");
     }
   }
 }

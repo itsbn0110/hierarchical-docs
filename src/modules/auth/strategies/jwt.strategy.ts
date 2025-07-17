@@ -1,11 +1,11 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
-import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
-import { ConfigService } from '@nestjs/config';
-import { UsersService } from '../../users/users.service';
-import { BusinessException } from 'src/common/filters/business.exception';
-import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
-import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
+import { HttpStatus, Injectable } from "@nestjs/common";
+import { PassportStrategy } from "@nestjs/passport";
+import { ExtractJwt, Strategy } from "passport-jwt";
+import { ConfigService } from "@nestjs/config";
+import { UsersService } from "../../users/users.service";
+import { BusinessException } from "src/common/filters/business.exception";
+import { ErrorCode } from "src/common/filters/constants/error-codes.enum";
+import { ErrorMessages } from "src/common/filters/constants/messages.constant";
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
@@ -15,7 +15,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_ACCESS_SECRET') || 'secretKey',
+      secretOrKey: configService.get<string>("JWT_ACCESS_SECRET") || "secretKey",
     });
   }
 
@@ -24,19 +24,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     const user = await this.usersService.findUserById(userId);
     if (!user || !user.isActive) {
-      throw new BusinessException(
-        ErrorCode.USER_NOT_FOUND,
-        ErrorMessages.USER_NOT_FOUND,
-        HttpStatus.NOT_FOUND,
-      );
+      throw new BusinessException(ErrorCode.USER_NOT_FOUND, ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND);
     }
 
     if (user && !user.isActive) {
-      throw new BusinessException(
-        ErrorCode.USER_NOT_FOUND,
-        ErrorMessages.USER_NOT_FOUND,
-        HttpStatus.NOT_FOUND,
-      );
+      throw new BusinessException(ErrorCode.USER_NOT_FOUND, ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND);
     }
 
     return user;

@@ -1,10 +1,10 @@
-import { Entity, ObjectIdColumn, Column, CreateDateColumn } from 'typeorm';
-import { ObjectId } from 'mongodb';
-import { PermissionLevel } from 'src/common/enums/projects.enum';
-import { Expose, Exclude, Transform } from 'class-transformer';
-import { transformObjectId } from 'src/common/helpers/transform.helpers';
+import { Entity, ObjectIdColumn, Column, CreateDateColumn } from "typeorm";
+import { ObjectId } from "mongodb";
+import { PermissionLevel } from "src/common/enums/projects.enum";
+import { Expose, Exclude, Transform } from "class-transformer";
+import { transformObjectId } from "src/common/helpers/transform.helpers";
 
-@Entity({ name: 'permissions' })
+@Entity({ name: "permissions" })
 @Exclude()
 export class Permission {
   @ObjectIdColumn()
@@ -23,14 +23,14 @@ export class Permission {
   nodeId: ObjectId;
 
   @Column({
-    type: 'enum',
+    type: "enum",
     enum: PermissionLevel,
   })
   @Expose()
   permission: PermissionLevel;
 
   @Expose()
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: "timestamp", nullable: true })
   lastAccessedAt?: Date;
 
   @Expose()
@@ -38,7 +38,7 @@ export class Permission {
   @Transform(transformObjectId)
   grantedBy: ObjectId;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ type: "timestamp" })
   @Expose()
   grantedAt: Date;
 }

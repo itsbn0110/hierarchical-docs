@@ -1,6 +1,6 @@
-import { Exclude, Expose, Transform } from 'class-transformer';
-import { transformObjectId } from 'src/common/helpers/transform.helpers';
-import { NodeType } from 'src/common/enums/projects.enum';
+import { Exclude, Expose, Transform } from "class-transformer";
+import { transformObjectId } from "src/common/helpers/transform.helpers";
+import { NodeType } from "src/common/enums/projects.enum";
 
 @Exclude()
 export class TrashedItemDto {

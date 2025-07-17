@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bullmq';
-import { PermissionLevel } from 'src/common/enums/projects.enum';
+import { Injectable } from "@nestjs/common";
+import { InjectQueue } from "@nestjs/bull";
+import { Queue } from "bullmq";
+import { PermissionLevel } from "src/common/enums/projects.enum";
 
 export interface NewAccessRequestJobData {
   ownerEmail: string;
@@ -13,7 +13,7 @@ export interface NewAccessRequestJobData {
 export interface RequestProcessedJobData {
   requesterEmail: string;
   nodeName: string;
-  status: 'APPROVED' | 'DENIED';
+  status: "APPROVED" | "DENIED";
   loginUrl: string;
 }
 
@@ -34,10 +34,10 @@ export interface WelcomeEmailJobData {
 
 @Injectable()
 export class EmailProducerService {
-  constructor(@InjectQueue('email') private emailQueue: Queue) {}
+  constructor(@InjectQueue("email") private emailQueue: Queue) {}
 
   async sendNewAccessRequestEmail(data: NewAccessRequestJobData) {
-    await this.emailQueue.add('new-access-request', data, {
+    await this.emailQueue.add("new-access-request", data, {
       removeOnComplete: true,
       removeOnFail: true,
     });
@@ -45,7 +45,7 @@ export class EmailProducerService {
   }
 
   async sendRequestProcessedEmail(data: RequestProcessedJobData) {
-    await this.emailQueue.add('request-processed', data, {
+    await this.emailQueue.add("request-processed", data, {
       removeOnComplete: true,
       removeOnFail: true,
     });
@@ -53,7 +53,7 @@ export class EmailProducerService {
   }
 
   async sendPermissionGrantedEmail(data: PermissionGrantedJobData) {
-    await this.emailQueue.add('permission-granted', data, {
+    await this.emailQueue.add("permission-granted", data, {
       removeOnComplete: true,
       removeOnFail: true,
     });
@@ -61,6 +61,6 @@ export class EmailProducerService {
   }
 
   async sendWelcomeEmail(data: WelcomeEmailJobData) {
-    await this.emailQueue.add('welcome-email', data, { removeOnComplete: true });
+    await this.emailQueue.add("welcome-email", data, { removeOnComplete: true });
   }
 }

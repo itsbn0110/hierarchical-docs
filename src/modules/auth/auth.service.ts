@@ -1,13 +1,13 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { UsersService } from '../users/users.service';
-import * as bcrypt from 'bcryptjs';
-import { User } from '../users/entities/user.entity';
-import { ConfigService } from '@nestjs/config';
-import { ObjectId } from 'mongodb';
-import { BusinessException } from 'src/common/filters/business.exception';
-import { ErrorCode } from 'src/common/filters/constants/error-codes.enum';
-import { ErrorMessages } from 'src/common/filters/constants/messages.constant';
+import { Injectable, ForbiddenException } from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import { UsersService } from "../users/users.service";
+import * as bcrypt from "bcryptjs";
+import { User } from "../users/entities/user.entity";
+import { ConfigService } from "@nestjs/config";
+import { ObjectId } from "mongodb";
+import { BusinessException } from "src/common/filters/business.exception";
+import { ErrorCode } from "src/common/filters/constants/error-codes.enum";
+import { ErrorMessages } from "src/common/filters/constants/messages.constant";
 
 @Injectable()
 export class AuthService {
@@ -21,9 +21,8 @@ export class AuthService {
    * Xác thực người dùng bằng email và password.
    * Được gọi bởi LocalStrategy.
    */
-  async validateUser(email: string, password: string): Promise<Omit<User, 'hashPassword'>> {
-    const user = await this.usersService.findByEmail(email);
-    // Sử dụng user.hashPassword thay vì hashPassword để nhất quán
+  async validateUser(email: string, password: string): Promise<Omit<User, "hashPassword">> {
+    const user = await this.usersService.findUserByEmail(email);
     if (user && user.hashPassword && (await bcrypt.compare(password, user.hashPassword))) {
       return user;
     }
@@ -46,7 +45,7 @@ export class AuthService {
    * Xử lý logic làm mới token.
    */
   async refreshTokens(userId: string, refreshToken: string) {
-    const user = await this.usersService.findById(userId);
+    const user = await this.usersService.findUserById(userId);
 
     if (!user || !user.hashedRefreshToken) {
       throw new BusinessException(ErrorCode.UNAUTHORIZED, ErrorMessages.UNAUTHORIZED, 401);
@@ -68,7 +67,6 @@ export class AuthService {
    * Xử lý logic đăng xuất.
    */
   async logout(userId: string | ObjectId) {
-    // Chỉ cần xóa refresh token là đủ để vô hiệu hóa các phiên làm mới
     await this.usersService.update(new ObjectId(userId), { hashedRefreshToken: null });
   }
 
@@ -84,17 +82,15 @@ export class AuthService {
           role: role,
         },
         {
-          secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-          expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRES_IN'),
+          secret: this.configService.get<string>("JWT_ACCESS_SECRET"),
+          expiresIn: this.configService.get<string>("JWT_ACCESS_EXPIRES_IN"),
         },
       ),
       this.jwtService.signAsync(
+        { sub: userId },
         {
-          sub: userId,
-        },
-        {
-          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-          expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN'),
+          secret: this.configService.get<string>("JWT_REFRESH_SECRET"),
+          expiresIn: this.configService.get<string>("JWT_REFRESH_EXPIRES_IN"),
         },
       ),
     ]);

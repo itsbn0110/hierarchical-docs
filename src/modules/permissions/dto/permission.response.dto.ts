@@ -1,7 +1,7 @@
-import { Exclude, Expose, Transform, Type } from 'class-transformer';
-import { ObjectId } from 'mongodb';
-import { PermissionLevel } from 'src/common/enums/projects.enum'; // Điều chỉnh đường dẫn nếu cần
-import { transformObjectId } from 'src/common/helpers/transform.helpers'; // Điều chỉnh đường dẫn nếu cần
+import { Exclude, Expose, Transform, Type } from "class-transformer";
+import { ObjectId } from "mongodb";
+import { PermissionLevel } from "src/common/enums/projects.enum"; // Điều chỉnh đường dẫn nếu cần
+import { transformObjectId } from "src/common/helpers/transform.helpers"; // Điều chỉnh đường dẫn nếu cần
 
 /**
  * DTO cho đối tượng User lồng bên trong.
@@ -18,6 +18,9 @@ class PermissionUserDto {
 
   @Expose()
   email: string;
+
+  @Expose()
+  isActive: boolean;
 }
 
 /**

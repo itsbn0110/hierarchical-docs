@@ -1,13 +1,13 @@
 // src/access-requests/entities/access-request.entity.ts
 
-import { Entity, ObjectIdColumn, Column, CreateDateColumn } from 'typeorm';
-import { ObjectId } from 'mongodb';
-import { PermissionLevel, RequestStatus } from 'src/common/enums/projects.enum';
-import { Exclude, Expose, Transform } from 'class-transformer';
-import { transformObjectId } from 'src/common/helpers/transform.helpers';
+import { Entity, ObjectIdColumn, Column, CreateDateColumn } from "typeorm";
+import { ObjectId } from "mongodb";
+import { PermissionLevel, RequestStatus } from "src/common/enums/projects.enum";
+import { Exclude, Expose, Transform } from "class-transformer";
+import { transformObjectId } from "src/common/helpers/transform.helpers";
 
 @Exclude()
-@Entity({ name: 'access_requests' })
+@Entity({ name: "access_requests" })
 export class AccessRequest {
   @ObjectIdColumn()
   @Expose()
@@ -26,7 +26,7 @@ export class AccessRequest {
 
   @Expose()
   @Column({
-    type: 'enum',
+    type: "enum",
     enum: [PermissionLevel.VIEWER, PermissionLevel.EDITOR],
   })
   requestedPermission: PermissionLevel;
@@ -41,7 +41,7 @@ export class AccessRequest {
 
   @Expose()
   @Column({
-    type: 'enum',
+    type: "enum",
     enum: RequestStatus,
     default: RequestStatus.PENDING,
   })
@@ -53,10 +53,10 @@ export class AccessRequest {
   reviewerId?: ObjectId;
 
   @Expose()
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: "timestamp", nullable: true })
   reviewedAt?: Date;
 
   @Expose()
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ type: "timestamp" })
   createdAt: Date;
 }

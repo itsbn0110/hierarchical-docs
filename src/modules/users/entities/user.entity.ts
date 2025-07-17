@@ -1,13 +1,13 @@
 // src/users/entities/user.entity.ts
 
-import { Entity, ObjectIdColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
-import { ObjectId } from 'mongodb';
-import { UserRole } from 'src/common/enums/projects.enum';
-import { Exclude, Expose, Transform } from 'class-transformer';
-import { transformObjectId } from 'src/common/helpers/transform.helpers';
+import { Entity, ObjectIdColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from "typeorm";
+import { ObjectId } from "mongodb";
+import { UserRole } from "src/common/enums/projects.enum";
+import { Exclude, Expose, Transform } from "class-transformer";
+import { transformObjectId } from "src/common/helpers/transform.helpers";
 
 @Exclude()
-@Entity('users')
+@Entity("users")
 export class User {
   @Expose()
   @Transform(transformObjectId)
@@ -28,7 +28,7 @@ export class User {
 
   @Expose()
   @Column({
-    type: 'enum',
+    type: "enum",
     enum: UserRole,
     default: UserRole.USER,
   })

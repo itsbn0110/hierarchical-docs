@@ -1,22 +1,22 @@
-import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, ExtractJwt } from 'passport-jwt';
-import { Injectable, ForbiddenException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { UsersService } from '../../users/users.service';
-import { Request } from 'express';
-import * as bcrypt from 'bcryptjs';
+import { PassportStrategy } from "@nestjs/passport";
+import { Strategy, ExtractJwt } from "passport-jwt";
+import { Injectable, ForbiddenException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { UsersService } from "../../users/users.service";
+import { Request } from "express";
+import * as bcrypt from "bcryptjs";
 
 @Injectable()
-export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
+export class JwtRefreshStrategy extends PassportStrategy(Strategy, "jwt-refresh") {
   constructor(
     private readonly configService: ConfigService,
     private readonly usersService: UsersService,
   ) {
     super({
       // Giữ nguyên logic lấy token từ body như file gốc của bạn
-      jwtFromRequest: ExtractJwt.fromBodyField('refreshToken'),
+      jwtFromRequest: ExtractJwt.fromBodyField("refreshToken"),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_REFRESH_SECRET'),
+      secretOrKey: configService.get<string>("JWT_REFRESH_SECRET"),
       // Rất quan trọng: Báo cho strategy biết cần truyền request vào hàm validate
       passReqToCallback: true,
     });
@@ -32,15 +32,15 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
-      throw new ForbiddenException('Refresh token not found in body');
+      throw new ForbiddenException("Refresh token not found in body");
     }
 
     // 2. Tìm người dùng từ payload
-    const user = await this.usersService.findById(payload.sub);
+    const user = await this.usersService.findUserById(payload.sub);
 
     // 3. Kiểm tra xem người dùng có tồn tại, active, và có refresh token trong DB không
     if (!user || !user.isActive || !user.hashedRefreshToken) {
-      throw new ForbiddenException('Access Denied');
+      throw new ForbiddenException("Access Denied");
     }
 
     // 4. So sánh refresh token từ request với token đã hash trong DB
@@ -48,7 +48,7 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
 
     // Nếu không khớp, từ chối
     if (!refreshTokenMatches) {
-      throw new ForbiddenException('Access Denied');
+      throw new ForbiddenException("Access Denied");
     }
 
     // 5. Nếu mọi thứ hợp lệ, trả về user (loại bỏ các trường nhạy cảm)

@@ -1,11 +1,11 @@
-import { Entity, ObjectIdColumn, Column, CreateDateColumn } from 'typeorm';
-import { ObjectId } from 'mongodb';
+import { Entity, ObjectIdColumn, Column, CreateDateColumn } from "typeorm";
+import { ObjectId } from "mongodb";
 // Định nghĩa các hành động có thể được ghi lại
-import { ActivityAction } from 'src/common/enums/projects.enum';
-import { Expose, Exclude } from 'class-transformer';
+import { ActivityAction } from "src/common/enums/projects.enum";
+import { Expose, Exclude } from "class-transformer";
 
 @Exclude()
-@Entity({ name: 'activity_logs' })
+@Entity({ name: "activity_logs" })
 export class ActivityLog {
   @ObjectIdColumn()
   @Expose()
@@ -16,7 +16,7 @@ export class ActivityLog {
   userId: ObjectId;
 
   @Expose()
-  @Column({ type: 'enum', enum: ActivityAction })
+  @Column({ type: "enum", enum: ActivityAction })
   action: ActivityAction;
 
   @Expose()
@@ -28,6 +28,6 @@ export class ActivityLog {
   details: Record<string, any>;
 
   @Expose()
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ type: "timestamp" })
   timestamp: Date;
 }

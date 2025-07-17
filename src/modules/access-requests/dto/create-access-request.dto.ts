@@ -1,14 +1,6 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsBoolean,
-  IsEnum,
-  IsMongoId,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  MaxLength,
-} from 'class-validator';
-import { PermissionLevel } from 'src/common/enums/projects.enum';
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { IsBoolean, IsEnum, IsMongoId, IsNotEmpty, IsOptional, IsString, MaxLength } from "class-validator";
+import { PermissionLevel } from "src/common/enums/projects.enum";
 
 export class CreateAccessRequestDto {
   /**
@@ -16,11 +8,11 @@ export class CreateAccessRequestDto {
    * @example '6856a1b2c3d4e5f6g7h8i9j0'
    */
   @ApiProperty({
-    description: 'ID của Node mà người dùng muốn xin quyền.',
-    example: '6856a1b2c3d4e5f6g7h8i9j0',
+    description: "ID của Node mà người dùng muốn xin quyền.",
+    example: "6856a1b2c3d4e5f6g7h8i9j0",
   })
-  @IsNotEmpty({ message: 'nodeId không được để trống.' })
-  @IsMongoId({ message: 'nodeId phải là một ID hợp lệ của MongoDB.' })
+  @IsNotEmpty({ message: "nodeId không được để trống." })
+  @IsMongoId({ message: "nodeId phải là một ID hợp lệ của MongoDB." })
   nodeId: string;
 
   /**
@@ -28,13 +20,13 @@ export class CreateAccessRequestDto {
    * Chỉ có thể là VIEWER hoặc EDITOR.
    */
   @ApiProperty({
-    description: 'Cấp độ quyền yêu cầu.',
+    description: "Cấp độ quyền yêu cầu.",
     enum: [PermissionLevel.VIEWER, PermissionLevel.EDITOR],
     example: PermissionLevel.VIEWER,
   })
-  @IsNotEmpty({ message: 'Cấp độ quyền không được để trống.' })
+  @IsNotEmpty({ message: "Cấp độ quyền không được để trống." })
   @IsEnum([PermissionLevel.VIEWER, PermissionLevel.EDITOR], {
-    message: 'Cấp độ quyền chỉ có thể là VIEWER hoặc EDITOR.',
+    message: "Cấp độ quyền chỉ có thể là VIEWER hoặc EDITOR.",
   })
   requestedPermission: PermissionLevel;
 
@@ -43,7 +35,7 @@ export class CreateAccessRequestDto {
    * Mặc định là false.
    */
   @ApiPropertyOptional({
-    description: 'Áp dụng yêu cầu cho cả các thư mục con.',
+    description: "Áp dụng yêu cầu cho cả các thư mục con.",
     default: false,
   })
   @IsOptional()
@@ -54,8 +46,8 @@ export class CreateAccessRequestDto {
    * Lời nhắn gửi cho chủ sở hữu.
    */
   @ApiPropertyOptional({
-    description: 'Lời nhắn tùy chọn gửi cho chủ sở hữu.',
-    example: 'Chào bạn, vui lòng cấp cho tôi quyền xem tài liệu này.',
+    description: "Lời nhắn tùy chọn gửi cho chủ sở hữu.",
+    example: "Chào bạn, vui lòng cấp cho tôi quyền xem tài liệu này.",
     maxLength: 500,
   })
   @IsOptional()

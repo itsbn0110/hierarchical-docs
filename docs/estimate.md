@@ -9,7 +9,6 @@ Setup TypeScript configuration
 Configure ESLint + Prettier theo Google TypeScript Style Guide
 Setup Git hooks với husky
 
-
 MongoDB & TypeORM Setup (2h)
 
 Cài đặt dependencies: @nestjs/typeorm, typeorm, mongodb
@@ -17,22 +16,21 @@ Cấu hình TypeORM module với MongoDB
 Setup environment configuration
 Docker compose cho MongoDB (optional)
 
-
 Project Structure (2h)
 src/
 ├── modules/
-│   ├── auth/
-│   ├── users/
-│   ├── nodes/
-│   ├── permissions/
-│   └── queue/
+│ ├── auth/
+│ ├── users/
+│ ├── nodes/
+│ ├── permissions/
+│ └── queue/
 ├── entities/
 ├── dto/
 ├── guards/
 ├── decorators/
 ├── utils/
 └── database/
-    └── seeders/
+└── seeders/
 
 Base Infrastructure (2h)
 
@@ -40,9 +38,6 @@ Setup Swagger documentation
 Configure global pipes (validation, transform)
 Setup global exception filters
 Create base response DTOs
-
-
-
 
 EPIC 0: Quản lý Người dùng và Xác thực (5 ngày)
 Story 0.1: Khởi tạo Root Admin (1 ngày)
@@ -58,34 +53,34 @@ Implementation:
 typescript// src/entities/user.entity.ts
 @Entity('users')
 export class User {
-  @ObjectIdColumn()
-  _id: ObjectId;
+@ObjectIdColumn()
+\_id: ObjectId;
 
-  @Column({ unique: true })
-  @IsEmail()
-  email: string;
+@Column({ unique: true })
+@IsEmail()
+email: string;
 
-  @Column({ unique: true })
-  @Length(3, 50)
-  username: string;
+@Column({ unique: true })
+@Length(3, 50)
+username: string;
 
-  @Column()
-  hashedPassword: string;
+@Column()
+hashedPassword: string;
 
-  @Column({ type: 'enum', enum: UserRole })
-  role: UserRole;
+@Column({ type: 'enum', enum: UserRole })
+role: UserRole;
 
-  @Column({ default: true })
-  isActive: boolean;
+@Column({ default: true })
+isActive: boolean;
 
-  @Column({ default: true })
-  mustChangePassword: boolean;
+@Column({ default: true })
+mustChangePassword: boolean;
 
-  @CreateDateColumn()
-  createdAt: Date;
+@CreateDateColumn()
+createdAt: Date;
 
-  @UpdateDateColumn()
-  updatedAt: Date;
+@UpdateDateColumn()
+updatedAt: Date;
 }
 Files to create:
 
@@ -123,13 +118,13 @@ Implementation Details:
 typescript// src/modules/users/users.service.ts
 @Injectable()
 export class UsersService {
-  async createUser(createUserDto: CreateUserDto): Promise<User>
-  async findById(id: string): Promise<User>
-  async findByEmail(email: string): Promise<User>
-  async updateUser(id: string, updateUserDto: UpdateUserDto): Promise<User>
-  async deleteUser(id: string): Promise<void>
-  async toggleUserStatus(id: string): Promise<User>
-  async changePassword(id: string, changePasswordDto: ChangePasswordDto): Promise<void>
+async createUser(createUserDto: CreateUserDto): Promise<User>
+async findById(id: string): Promise<User>
+async findUserByEmail(email: string): Promise<User>
+async updateUser(id: string, updateUserDto: UpdateUserDto): Promise<User>
+async deleteUser(id: string): Promise<void>
+async toggleUserStatus(id: string): Promise<User>
+async changePassword(id: string, changePasswordDto: ChangePasswordDto): Promise<void>
 }
 Files to create:
 
@@ -192,7 +187,6 @@ src/guards/first-login.guard.ts
 src/modules/auth/dto/first-login.dto.ts
 test/integration/auth/first-login.spec.ts
 
-
 EPIC 1: Quản lý Cấu trúc Thư mục và Tài liệu (7 ngày)
 Story 1.1: Xem cấu trúc cây thư mục (3 ngày)
 Task 1.1.1: Node Entity & Schema Design (1 ngày)
@@ -207,50 +201,50 @@ Implementation:
 typescript// src/entities/node.entity.ts
 @Entity('nodes')
 export class Node {
-  @ObjectIdColumn()
-  _id: ObjectId;
+@ObjectIdColumn()
+\_id: ObjectId;
 
-  @Column()
-  @Length(1, 255)
-  name: string;
+@Column()
+@Length(1, 255)
+name: string;
 
-  @Column({ type: 'enum', enum: NodeType })
-  type: NodeType;
+@Column({ type: 'enum', enum: NodeType })
+type: NodeType;
 
-  @Column({ nullable: true })
-  parentId: ObjectId | null;
+@Column({ nullable: true })
+parentId: ObjectId | null;
 
-  @Column({ default: [] })
-  path: ObjectId[]; // Materialized path
+@Column({ default: [] })
+path: ObjectId[]; // Materialized path
 
-  @Column({ default: 0 })
-  level: number;
+@Column({ default: 0 })
+level: number;
 
-  // File-specific fields
-  @Column({ nullable: true })
-  content: string | null;
+// File-specific fields
+@Column({ nullable: true })
+content: string | null;
 
-  @Column({ nullable: true })
-  mimeType: string | null;
+@Column({ nullable: true })
+mimeType: string | null;
 
-  @Column({ nullable: true })
-  fileSize: number | null;
+@Column({ nullable: true })
+fileSize: number | null;
 
-  @Column({ default: 1 })
-  version: number;
+@Column({ default: 1 })
+version: number;
 
-  // Embedded permissions
-  @Column({ default: [] })
-  permissions: Permission[];
+// Embedded permissions
+@Column({ default: [] })
+permissions: Permission[];
 
-  @Column()
-  createdBy: ObjectId;
+@Column()
+createdBy: ObjectId;
 
-  @CreateDateColumn()
-  createdAt: Date;
+@CreateDateColumn()
+createdAt: Date;
 
-  @UpdateDateColumn()
-  updatedAt: Date;
+@UpdateDateColumn()
+updatedAt: Date;
 }
 Files to create:
 
@@ -271,13 +265,13 @@ Implementation:
 typescript// src/modules/nodes/services/tree.service.ts
 @Injectable()
 export class TreeService {
-  async getNodeTree(rootId: string, userId: ObjectId, user: User): Promise<TreeNode[]>
-  async getNodePath(nodeId: string): Promise<Node[]>
-  async getNodeChildren(parentId: string, userId: ObjectId): Promise<Node[]>
-  async getNodeAncestors(nodeId: string): Promise<Node[]>
-  async getNodeDescendants(nodeId: string): Promise<Node[]>
-  async moveNode(nodeId: string, newParentId: string): Promise<Node>
-  private updateChildrenPaths(node: Node): Promise<void>
+async getNodeTree(rootId: string, userId: ObjectId, user: User): Promise<TreeNode[]>
+async getNodePath(nodeId: string): Promise<Node[]>
+async getNodeChildren(parentId: string, userId: ObjectId): Promise<Node[]>
+async getNodeAncestors(nodeId: string): Promise<Node[]>
+async getNodeDescendants(nodeId: string): Promise<Node[]>
+async moveNode(nodeId: string, newParentId: string): Promise<Node>
+private updateChildrenPaths(node: Node): Promise<void>
 }
 Files to create:
 
@@ -297,12 +291,12 @@ Deliverables:
 ✅ Transaction handling
 
 API Endpoints:
-typescriptPOST /nodes/folders                    // Create folder
-GET /nodes/folders/:id                 // Get folder details
-GET /nodes/folders/:id/children        // Get folder contents
-PUT /nodes/folders/:id                 // Update folder
-DELETE /nodes/folders/:id              // Delete folder
-POST /nodes/folders/:id/move           // Move folder
+typescriptPOST /nodes/folders // Create folder
+GET /nodes/folders/:id // Get folder details
+GET /nodes/folders/:id/children // Get folder contents
+PUT /nodes/folders/:id // Update folder
+DELETE /nodes/folders/:id // Delete folder
+POST /nodes/folders/:id/move // Move folder
 Files to create:
 
 src/modules/nodes/services/folder.service.ts
@@ -321,12 +315,12 @@ Deliverables:
 ✅ File metadata handling
 
 API Endpoints:
-typescriptPOST /nodes/files                      // Create file
-GET /nodes/files/:id                   // Get file content
-PUT /nodes/files/:id                   // Update file
-DELETE /nodes/files/:id                // Delete file
-GET /nodes/files/:id/versions          // Get file versions
-POST /nodes/files/:id/move             // Move file
+typescriptPOST /nodes/files // Create file
+GET /nodes/files/:id // Get file content
+PUT /nodes/files/:id // Update file
+DELETE /nodes/files/:id // Delete file
+GET /nodes/files/:id/versions // Get file versions
+POST /nodes/files/:id/move // Move file
 Files to create:
 
 src/modules/nodes/services/file.service.ts
@@ -334,7 +328,6 @@ src/modules/nodes/controllers/file.controller.ts
 src/modules/nodes/dto/create-file.dto.ts
 src/modules/nodes/dto/update-file.dto.ts
 test/integration/nodes/file.controller.spec.ts
-
 
 EPIC 2: Hệ thống Phân quyền (5 ngày)
 Story 2.1 & 2.2: Permission Management (3 ngày)
@@ -350,12 +343,12 @@ Implementation:
 typescript// src/modules/permissions/permissions.service.ts
 @Injectable()
 export class PermissionsService {
-  async grantPermission(nodeId: string, userId: string, permission: PermissionType, grantedBy: ObjectId): Promise<void>
-  async revokePermission(nodeId: string, userId: string): Promise<void>
-  async checkPermission(nodeId: string, userId: ObjectId, requiredPermission: PermissionType): Promise<boolean>
-  async getUserPermissions(userId: string): Promise<NodePermission[]>
-  async getNodePermissions(nodeId: string): Promise<Permission[]>
-  async bulkGrantPermissions(requests: BulkPermissionRequest[]): Promise<void>
+async grantPermission(nodeId: string, userId: string, permission: PermissionType, grantedBy: ObjectId): Promise<void>
+async revokePermission(nodeId: string, userId: string): Promise<void>
+async checkPermission(nodeId: string, userId: ObjectId, requiredPermission: PermissionType): Promise<boolean>
+async getUserPermissions(userId: string): Promise<NodePermission[]>
+async getNodePermissions(nodeId: string): Promise<Permission[]>
+async bulkGrantPermissions(requests: BulkPermissionRequest[]): Promise<void>
 }
 Files to create:
 
@@ -406,7 +399,6 @@ Files to create:
 src/modules/permissions/services/permission-optimizer.service.ts
 test/performance/permission-queries.spec.ts
 
-
 EPIC 3: Search & Discovery (3 ngày)
 Story 3.1 & 3.2: Search Implementation
 Task 3.1.1: Full-text Search Service (2 ngày)
@@ -421,16 +413,16 @@ Implementation:
 typescript// src/modules/search/search.service.ts
 @Injectable()
 export class SearchService {
-  async searchNodes(query: string, userId: ObjectId, user: User): Promise<SearchResult[]>
-  async searchInFolder(folderId: string, query: string, userId: ObjectId): Promise<SearchResult[]>
-  async advancedSearch(criteria: SearchCriteria, userId: ObjectId): Promise<SearchResult[]>
-  private filterByPermissions(results: Node[], userId: ObjectId, user: User): Promise<SearchResult[]>
-  private buildSearchQuery(criteria: SearchCriteria): any
+async searchNodes(query: string, userId: ObjectId, user: User): Promise<SearchResult[]>
+async searchInFolder(folderId: string, query: string, userId: ObjectId): Promise<SearchResult[]>
+async advancedSearch(criteria: SearchCriteria, userId: ObjectId): Promise<SearchResult[]>
+private filterByPermissions(results: Node[], userId: ObjectId, user: User): Promise<SearchResult[]>
+private buildSearchQuery(criteria: SearchCriteria): any
 }
 API Endpoints:
-typescriptGET /search?q=keyword                  // Basic search
-POST /search/advanced                  // Advanced search
-GET /search/folder/:id?q=keyword       // Search in folder
+typescriptGET /search?q=keyword // Basic search
+POST /search/advanced // Advanced search
+GET /search/folder/:id?q=keyword // Search in folder
 Files to create:
 
 src/modules/search/search.module.ts
@@ -451,7 +443,6 @@ Files to create:
 
 src/modules/search/services/result-processor.service.ts
 test/integration/search/search.controller.spec.ts
-
 
 EPIC 4: Access Request System (4 ngày)
 Story 4.1-4.4: Request Management
@@ -480,11 +471,11 @@ Deliverables:
 ✅ Integration tests
 
 API Endpoints:
-typescriptPOST /access-requests                  // Create request
-GET /access-requests                   // Get user's requests
-GET /access-requests/pending           // Get pending requests for review
-PUT /access-requests/:id/approve       // Approve request
-PUT /access-requests/:id/reject        // Reject request
+typescriptPOST /access-requests // Create request
+GET /access-requests // Get user's requests
+GET /access-requests/pending // Get pending requests for review
+PUT /access-requests/:id/approve // Approve request
+PUT /access-requests/:id/reject // Reject request
 
 EPIC 5: Notifications & Background Jobs (3 ngày)
 Story 5.1-5.4: Queue & Email System
@@ -518,7 +509,6 @@ src/modules/email/email.service.ts
 src/modules/email/templates/
 src/modules/email/dto/send-email.dto.ts
 
-
 📋 Testing Strategy
 Unit Tests (Parallel với development)
 
@@ -537,23 +527,22 @@ E2E Tests
 Environment: Docker containers
 Focus: Complete user journeys
 
-
 🚀 Deployment & DevOps
 CI/CD Pipeline
 yaml# .github/workflows/ci.yml
+
 - Build & Test
 - Security Scan
 - Docker Build
 - Deploy to Staging
 - E2E Tests
 - Deploy to Production
-Monitoring Setup
+  Monitoring Setup
 
 Health Checks: /health
 Metrics: Prometheus + Grafana
 Logging: Winston + ELK Stack
 Error Tracking: Sentry
-
 
 📊 Timeline Summary
 EpicDurationDependenciesSetup1 ngàyNoneEPIC 05 ngàySetupEPIC 17 ngàyEPIC 0EPIC 25 ngàyEPIC 1EPIC 33 ngàyEPIC 2EPIC 44 ngàyEPIC 2, 3EPIC 53 ngàyAll EPICs
