@@ -1,7 +1,9 @@
 import { Injectable, Inject, forwardRef } from "@nestjs/common";
 import { InjectConnection, InjectRepository } from "@nestjs/typeorm";
-import { Connection, In, IsNull, MongoRepository, Not } from "typeorm";
+import { Connection, MongoRepository } from "typeorm";
 import { ObjectId } from "mongodb";
+import { CACHE_MANAGER } from "@nestjs/cache-manager";
+import { Cache } from "cache-manager";
 
 import { Node } from "./entities/node.entity";
 import { CreateNodeDto } from "./dto/create-node.dto";
@@ -24,6 +26,7 @@ import { UsersService } from "../users/users.service";
 import { NodeDetailsDto } from "./dto/node-details-dto";
 import { TrashedItemDto } from "./dto/trashed-item.dto";
 import { Cron, CronExpression } from "@nestjs/schedule";
+import { PaginationQueryDto } from "./dto/pagination-query-dto";
 
 type Ancestor = {
   _id: ObjectId;
@@ -46,9 +49,10 @@ export class NodesService {
     @Inject(forwardRef(() => UsersService))
     private readonly usersService: UsersService,
     @InjectConnection() private readonly connection: Connection,
+
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
-  // ... (Các hàm create, update, delete, move giữ nguyên)
   async create(createNodeDto: CreateNodeDto, user: User): Promise<Node> {
     const { name, type, parentId, content } = createNodeDto;
     let parentNode: Node | null = null;
@@ -71,7 +75,7 @@ export class NodesService {
       );
       if (!canCreate && user.role !== UserRole.ROOT_ADMIN) {
         throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.INSUFFICIENT_PERMISSIONS, 403);
-      } 
+      }
       // Dùng hàm mới để lấy tất cả ID của Owner từ cha
       parentOwnerIds = await this.permissionsService.findOwnerIdsOfNode(parentNode._id);
       ancestors = [...parentNode.ancestors, { _id: parentNode._id, name: parentNode.name }];
@@ -94,7 +98,7 @@ export class NodesService {
     // các ownerIds của th cha,
     parentOwnerIds.forEach((id) => ownerIdSet.add(id.toHexString())); // Thêm các owner kế thừa từ cha
 
-    const finalOwnerIds = Array.from(ownerIdSet).map((id) => new ObjectId(id)); 
+    const finalOwnerIds = Array.from(ownerIdSet).map((id) => new ObjectId(id));
 
     // Dùng hàm mới để gán quyền hàng loạt
     await this.permissionsService.grantOwnerPermissionToUsers(
@@ -115,13 +119,136 @@ export class NodesService {
         createdAt: newNode.createdAt,
       },
     });
+    // Invalidate cache cho parent folder
+    await this.invalidateChildrenCache(createNodeDto.parentId, user._id.toString());
     return newNode;
   }
 
+  // async getTreeForUser(rootNodeId: string, user: User): Promise<TreeNodeDto[]> {
+  //   // console.time(`MONGO_QUERY_${rootNodeId}`);
+  //   const rootObjectId = new ObjectId(rootNodeId);
+  //   const userId = user._id;
+
+  //   const aggregationPipeline: any[] = [
+  //     // Giai đoạn 1: Match
+  //     {
+  //       $match: {
+  //         $or: [{ _id: rootObjectId }, { "ancestors._id": rootObjectId }],
+  //         deletedAt: null,
+  //       },
+  //     },
+  //     // Giai đoạn 2: Lookup Permissions
+  //     {
+  //       $lookup: {
+  //         from: "permissions",
+  //         let: { nodeId: "$_id" },
+  //         pipeline: [
+  //           {
+  //             $match: {
+  //               $expr: {
+  //                 $and: [{ $eq: ["$nodeId", "$$nodeId"] }, { $eq: ["$userId", userId] }],
+  //               },
+  //             },
+  //           },
+  //         ],
+  //         as: "userPermissionInfo",
+  //       },
+  //     },
+  //     // Giai đoạn 3: Lookup Users
+  //     {
+  //       $lookup: {
+  //         from: "users",
+  //         localField: "createdBy",
+  //         foreignField: "_id",
+  //         as: "creatorInfo",
+  //       },
+  //     },
+  //     // Giai đoạn 4: AddFields
+  //     {
+  //       $addFields: {
+  //         userPermission: { $ifNull: [{ $first: "$userPermissionInfo.permission" }, null] },
+  //         creatorUsername: { $ifNull: [{ $first: "$creatorInfo.username" }, "Người dùng cũ"] },
+  //       },
+  //     },
+  //   ];
+
+  //   if (user.role !== UserRole.ROOT_ADMIN) {
+  //     aggregationPipeline.push({
+  //       $match: {
+  //         userPermission: { $ne: null },
+  //       },
+  //     });
+  //   }
+
+  //   // GIAI ĐOẠN ĐÃ ĐƯỢC SỬA LỖI
+  //   aggregationPipeline.push({
+  //     $project: {
+  //       // Chỉ định rõ các trường muốn giữ lại
+  //       _id: 1,
+  //       name: 1,
+  //       type: 1,
+  //       parentId: 1,
+  //       level: 1,
+  //       userPermission: 1,
+  //       createdBy: "$creatorUsername", // Sử dụng trường đã tính toán
+  //     },
+  //   });
+
+  //   // 3. Thực thi pipeline và lấy về danh sách phẳng
+  //   const flatList = await this.nodesRepository.aggregate(aggregationPipeline).toArray();
+  //   if (flatList.length === 0) {
+  //     return [];
+  //   }
+
+  //   // 4. Tái cấu trúc danh sách phẳng thành dạng cây
+  //   const treeNodeDtos = this.buildTreeFromFlatList(flatList, rootObjectId);
+  //   // console.timeEnd(`MONGO_QUERY_${rootNodeId}`);
+
+  //   return treeNodeDtos;
+  // }
+
+  /**
+   * Hàm trợ giúp: Tái cấu trúc một danh sách các node phẳng thành cấu trúc cây.
+   * @param nodes Danh sách node từ database
+   * @param rootId ID của node gốc để bắt đầu xây dựng cây
+   * @returns Mảng các TreeNodeDto cấp cao nhất
+   */
+  // private buildTreeFromFlatList(nodes: any[], rootId: ObjectId): TreeNodeDto[] {
+  //   const map = new Map<string, TreeNodeDto>();
+
+  //   // Khởi tạo tất cả các node vào map để tra cứu nhanh
+  //   nodes.forEach((node) => {
+  //     // Chuyển đổi object thô từ aggregation thành DTO
+  //     const nodeDto = plainToInstance(TreeNodeDto, { ...node, id: node._id, children: [] });
+  //     map.set(node._id.toHexString(), nodeDto);
+  //   });
+
+  //   const tree: TreeNodeDto[] = [];
+  //   for (const node of nodes) {
+  //     const nodeIdStr = node._id.toHexString();
+  //     const parentIdStr = node.parentId?.toHexString();
+
+  //     if (parentIdStr && map.has(parentIdStr)) {
+  //       // Nếu có cha, thêm node này vào mảng children của cha
+  //       map.get(parentIdStr)?.children.push(map.get(nodeIdStr)!);
+  //     } else if (node._id.equals(rootId)) {
+  //       // Nếu là node gốc của cây con đang xét, thêm vào kết quả cuối cùng
+  //       tree.push(map.get(nodeIdStr)!);
+  //     }
+  //   }
+
+  //   // Nếu cây rỗng nhưng map có node gốc (trường hợp thư mục rỗng)
+  //   if (tree.length === 0 && map.has(rootId.toHexString())) {
+  //     return [map.get(rootId.toHexString())!];
+  //   }
+
+  //   return tree;
+  // }
+
   async getTreeForUser(parentId: string | null, user: User): Promise<TreeNodeDto[]> {
     const parentObjectId = parentId ? new ObjectId(parentId) : null;
-    let nodes: Node[]; 
-    
+    let nodes: Node[];
+
     // --- BƯỚC 1: KIỂM TRA QUYỀN TRUY CẬP VÀO THƯ MỤC CHA ---
     // (Bỏ qua nếu là Root Admin hoặc đang xem ở cấp gốc)
 
@@ -130,20 +257,20 @@ export class NodesService {
         user,
         parentObjectId,
         PermissionLevel.VIEWER, // Chỉ cần ít nhất quyền xem
-      ); 
-      
+      );
+
       // Nếu không có quyền xem thư mục cha, ném lỗi Forbidden ngay lập tức.
       if (!canViewParent) {
         throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.ACCESS_DENIED, 403);
       }
-    } 
+    }
     // --- 1. Lấy danh sách Node con mà User có quyền xem ---
     if (user.role === UserRole.ROOT_ADMIN) {
       nodes = await this.nodesRepository.find({ where: { parentId: parentObjectId } });
     } else {
       // Lấy tất cả các quyền của user
       const userPermissions = await this.permissionsService.findAllForUser(user._id);
-      const accessibleNodeIds = userPermissions.map((p) => p.nodeId); 
+      const accessibleNodeIds = userPermissions.map((p) => p.nodeId);
 
       // Tìm các node con của parentId VÀ user có quyền truy cập
       nodes = await this.nodesRepository.find({
@@ -169,12 +296,12 @@ export class NodesService {
     const treeDtos = nodes.map(async (node) => {
       const nodeIdString = node._id.toHexString();
 
-      let createdByUser
+      let createdByUser;
 
       if (node.createdBy) {
-         createdByUser = await this.usersService.findUserById(node.createdBy.toHexString());
+        createdByUser = await this.usersService.findUserById(node.createdBy.toHexString());
       }
-      
+
       return plainToInstance(TreeNodeDto, {
         // Dùng plainToInstance để áp dụng decorator của DTO
         id: node._id,
@@ -190,13 +317,803 @@ export class NodesService {
     return await Promise.all(treeDtos);
   }
 
+  async getSubtreeForUserOptimized(rootNodeId: string, user: User): Promise<TreeNodeDto[]> {
+    const rootObjectId = new ObjectId(rootNodeId);
+    const userId = user._id;
+
+    const aggregationPipeline: any[] = [
+      {
+        $match: {
+          $or: [{ _id: rootObjectId }, { "ancestors._id": rootObjectId }],
+          deletedAt: null,
+        },
+      },
+      {
+        $lookup: {
+          from: "permissions",
+          let: { nodeId: "$_id" },
+          pipeline: [{ $match: { $expr: { $and: [{ $eq: ["$nodeId", "$$nodeId"] }, { $eq: ["$userId", userId] }] } } }],
+          as: "userPermissionInfo",
+        },
+      },
+      { $lookup: { from: "users", localField: "createdBy", foreignField: "_id", as: "creatorInfo" } },
+      {
+        $addFields: {
+          userPermission: { $ifNull: [{ $first: "$userPermissionInfo.permission" }, null] },
+          creatorUsername: { $ifNull: [{ $first: "$creatorInfo.username" }, "Người dùng cũ"] },
+        },
+      },
+    ];
+
+    if (user.role !== UserRole.ROOT_ADMIN) {
+      aggregationPipeline.push({ $match: { userPermission: { $ne: null } } });
+    }
+
+    aggregationPipeline.push({
+      $project: {
+        _id: 1,
+        name: 1,
+        type: 1,
+        parentId: 1,
+        level: 1,
+        userPermission: 1,
+        createdBy: "$creatorUsername",
+      },
+    });
+
+    const flatList = await this.nodesRepository.aggregate(aggregationPipeline).toArray();
+    console.log("check flatList: ", flatList);
+    if (flatList.length === 0) {
+      return [];
+    }
+
+    // Tái cấu trúc danh sách phẳng thành cây
+    return this.buildTreeFromFlatList(flatList, rootObjectId);
+  }
+
   /**
-   * [MỚI] Lấy thông tin chi tiết của một node (folder hoặc file)
-   * Hàm này dùng cho cả trang xem folder và trang xem file để lấy breadcrumb và content.
-   * @param nodeId ID của node cần lấy
-   * @param user User đang thực hiện yêu cầu
-   * @returns Toàn bộ entity Node
+   * Hàm trợ giúp: Tái cấu trúc danh sách phẳng thành cây.
    */
+  private buildTreeFromFlatList(nodes: any[], rootId: ObjectId): TreeNodeDto[] {
+    const map = new Map<string, TreeNodeDto>();
+    const tree: TreeNodeDto[] = [];
+
+    nodes.forEach((node) => {
+      const nodeDto = plainToInstance(TreeNodeDto, { ...node, id: node._id, children: [] });
+      map.set(node._id.toHexString(), nodeDto);
+    });
+
+    for (const node of nodes) {
+      const nodeIdStr = node._id.toHexString();
+      const parentIdStr = node.parentId?.toHexString();
+
+      if (parentIdStr && map.has(parentIdStr)) {
+        map.get(parentIdStr)?.children.push(map.get(nodeIdStr)!);
+      } else if (node._id.equals(rootId)) {
+        tree.push(map.get(nodeIdStr)!);
+      }
+    }
+
+    if (tree.length === 0 && map.has(rootId.toHexString())) {
+      return [map.get(rootId.toHexString())!];
+    }
+
+    return tree;
+  }
+
+  async getChildrenNodeDirectly(parentId: string | null, user: User): Promise<any[]> {
+    console.time("getChildrentime: ");
+    const parentObjectId = parentId ? new ObjectId(parentId) : null;
+    const userId = user._id;
+
+    // --- BƯỚC 1: CHẠY AGGREGATION CHÍNH ĐỂ LẤY DỮ LIỆU NODE ---
+    const aggregationPipeline: any[] = [
+      // Các giai đoạn $match, $lookup, $addFields, $project giữ nguyên như trước...
+      { $match: { parentId: parentObjectId, deletedAt: null } },
+      {
+        $lookup: {
+          from: "permissions",
+          let: { nodeId: "$_id" },
+          pipeline: [{ $match: { $expr: { $and: [{ $eq: ["$nodeId", "$$nodeId"] }, { $eq: ["$userId", userId] }] } } }],
+          as: "userPermissionInfo",
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "createdBy",
+          foreignField: "_id",
+          as: "creatorInfo",
+        },
+      },
+      {
+        $addFields: {
+          userPermission: { $ifNull: [{ $first: "$userPermissionInfo.permission" }, null] },
+          creatorUsername: { $ifNull: [{ $first: "$creatorInfo.username" }, "Người dùng cũ"] },
+        },
+      },
+    ];
+
+    if (user.role !== UserRole.ROOT_ADMIN) {
+      aggregationPipeline.push({ $match: { userPermission: { $ne: null } } });
+    }
+
+    aggregationPipeline.push({
+      $project: {
+        _id: 1,
+        name: 1,
+        type: 1,
+        parentId: 1,
+        level: 1,
+        userPermission: 1,
+        createdBy: "$creatorUsername",
+      },
+    });
+
+    const children = await this.nodesRepository.aggregate(aggregationPipeline).toArray();
+
+    if (children.length === 0) {
+      return [];
+    }
+
+    // --- BƯỚC 2: TÌM XEM NODE NÀO TRONG KẾT QUẢ CÓ CON ---
+
+    // Lấy ra tất cả ID của các node con vừa tìm được
+    const childrenIds = children.map((c) => c._id);
+
+    // Thực hiện 1 query phụ, rất nhanh để tìm tất cả các node là thư mục cha
+    const nodesThatAreParents = await this.nodesRepository.distinct("parentId", {
+      parentId: { $in: childrenIds },
+    });
+
+    // Chuyển kết quả thành một Set để tra cứu nhanh (O(1))
+    const parentIdsWithChildren = new Set(nodesThatAreParents.map((id) => id.toHexString()));
+
+    // --- BƯỚC 3: KẾT HỢP DỮ LIỆU ---
+
+    // Map qua kết quả và thêm trường `hasChildren`
+    const treeNodeDtos = children.map((c) => ({
+      ...c,
+      id: c._id,
+      // Nếu type là FILE thì chắc chắn không có con
+      // Nếu là FOLDER, kiểm tra xem ID của nó có trong Set ở trên không
+      hasChildren: c.type === NodeType.FOLDER && parentIdsWithChildren.has(c._id.toHexString()),
+    }));
+    console.timeEnd("getChildrentime: ");
+    return plainToInstance(TreeNodeDto, treeNodeDtos);
+  }
+
+  async getChildrenWithPagination(
+    parentId: string | null,
+    user: User,
+    paginationQuery: PaginationQueryDto,
+  ): Promise<{ data: any; metadata: any }> {
+    // Tạo cache key dựa trên các tham số
+    const cacheKey = `children:${parentId}:${user._id}:${paginationQuery.page}:${paginationQuery.limit}`;
+
+    // Kiểm tra cache
+    const cachedData = await this.cacheManager.get<{ data: any; metadata: any } | null>(cacheKey);
+    if (cachedData !== undefined) {
+      // Thay đổi điều kiện để bao gồm cả null
+      return cachedData;
+    }
+
+    const { page, limit } = paginationQuery;
+    const parentObjectId = parentId ? new ObjectId(parentId) : null;
+    const userId = user._id;
+    const skipAmount = (page - 1) * limit;
+
+    // --- BƯỚC 1: XÂY DỰNG PIPELINE CHÍNH ---
+    const aggregationPipeline: any[] = [
+      // Các giai đoạn lọc và join ban đầu
+      { $match: { parentId: parentObjectId, deletedAt: null } },
+      // ... các bước $lookup và $addFields để lấy quyền và tên người tạo như cũ ...
+      {
+        $lookup: {
+          from: "permissions",
+          let: { nodeId: "$_id" },
+          pipeline: [{ $match: { $expr: { $and: [{ $eq: ["$nodeId", "$$nodeId"] }, { $eq: ["$userId", userId] }] } } }],
+          as: "userPermissionInfo",
+        },
+      },
+      { $lookup: { from: "users", localField: "createdBy", foreignField: "_id", as: "creatorInfo" } },
+      {
+        $addFields: {
+          userPermission: { $ifNull: [{ $first: "$userPermissionInfo.permission" }, null] },
+          creatorUsername: { $ifNull: [{ $first: "$creatorInfo.username" }, "Người dùng cũ"] },
+        },
+      },
+    ];
+
+    // Thêm bộ lọc quyền nếu không phải Root Admin
+    if (user.role !== UserRole.ROOT_ADMIN) {
+      aggregationPipeline.push({ $match: { userPermission: { $ne: null } } });
+    }
+
+    // --- BƯỚC 2: THÊM GIAI ĐOẠN $facet ĐỂ PHÂN TRANG VÀ ĐẾM ---
+    aggregationPipeline.push({
+      $facet: {
+        // Nhánh 1: Lấy dữ liệu cho trang hiện tại
+        data: [
+          { $sort: { type: 1, name: 1 } }, // Sắp xếp thư mục lên trước, rồi theo tên
+          { $skip: skipAmount },
+          { $limit: limit },
+          {
+            $project: {
+              _id: 1,
+              name: 1,
+              type: 1,
+              parentId: 1,
+              level: 1,
+              userPermission: 1,
+              createdBy: "$creatorUsername",
+            },
+          },
+        ],
+        // Nhánh 2: Lấy tổng số document
+        metadata: [{ $count: "total" }],
+      },
+    });
+
+    const results = await this.nodesRepository.aggregate(aggregationPipeline).toArray();
+    const paginatedResult = results[0]; // Kết quả nằm trong phần tử đầu tiên
+
+    if (!paginatedResult || paginatedResult.data.length === 0) {
+      const emptyResult = { data: [], metadata: { total: 0, page, limit } };
+      // Cache kết quả rỗng với thời gian ngắn hơn (ví dụ: 5 phút)
+      await this.cacheManager.set(cacheKey, emptyResult, 300); // 300 seconds = 5 minutes
+      return emptyResult;
+    }
+
+    // --- BƯỚC 3: LẤY `hasChildren` CHO DỮ LIỆU CỦA TRANG HIỆN TẠI ---
+    const currentPageData = paginatedResult.data;
+    const currentPageIds = currentPageData.map((c) => c._id);
+    const nodesThatAreParents = await this.nodesRepository.distinct("parentId", { parentId: { $in: currentPageIds } });
+    const parentIdsWithChildren = new Set(nodesThatAreParents.map((id) => id.toHexString()));
+
+    // --- BƯỚC 4: KẾT HỢP VÀ TRẢ VỀ ---
+    const finalData = currentPageData.map((node) => ({
+      ...node,
+      id: node._id,
+      hasChildren: node.type === NodeType.FOLDER && parentIdsWithChildren.has(node._id.toHexString()),
+    }));
+
+    const metadata = {
+      total: paginatedResult.metadata[0]?.total || 0,
+      page,
+      limit,
+    };
+
+    const finalResult = {
+      data: plainToInstance(TreeNodeDto, finalData),
+      metadata,
+    };
+
+    // Lưu kết quả vào cache
+    await this.cacheManager.set(cacheKey, finalResult, 1800);
+
+    return finalResult;
+  }
+
+  /**
+   *  Thử lấy metadata từ cache để biết tổng số bản ghi
+      Tính toán chính xác số trang cần xóa dựa trên tổng số bản ghi
+      Nếu không có metadata (cache đã hết hạn), xóa 100 trang đầu tiên cho mỗi limit
+      Thêm xử lý lỗi để đảm bảo luôn xóa được cache
+      Tăng số trang mặc định từ 10 lên 100 để an toàn hơn
+   */
+  // Thêm method để xóa cache khi có thay đổi
+  private async invalidateChildrenCache(parentId: string | null, userId: string): Promise<void> {
+    const pattern = `children:${parentId}:${userId}:`;
+    const possibleLimits = [10, 20, 50, 100];
+
+    try {
+      // Đầu tiên, thử lấy metadata từ trang đầu tiên với limit nhỏ nhất
+      // để biết tổng số bản ghi
+      const cacheKey = `children:${parentId}:${userId}:1:10`;
+      const cachedData = await this.cacheManager.get<{ data: any; metadata: any }>(cacheKey);
+
+      if (cachedData?.metadata?.total) {
+        // Nếu có metadata, tính toán số trang tối đa cho mỗi limit
+        for (const limit of possibleLimits) {
+          const maxPages = Math.ceil(cachedData.metadata.total / limit);
+          for (let page = 1; page <= maxPages; page++) {
+            const key = `children:${parentId}:${userId}:${page}:${limit}`;
+            await this.cacheManager.del(key);
+          }
+        }
+      } else {
+        // Nếu không có metadata (có thể cache đã hết hạn),
+        // xóa một số lượng trang an toàn (ví dụ: 100 trang đầu)
+        for (const limit of possibleLimits) {
+          for (let page = 1; page <= 100; page++) {
+            const key = `children:${parentId}:${userId}:${page}:${limit}`;
+            await this.cacheManager.del(key);
+          }
+        }
+      }
+    } catch (error) {
+      // Nếu có lỗi khi truy cập cache, log lỗi và xóa một số lượng trang an toàn
+      console.error("Error while invalidating cache:", error);
+      for (const limit of possibleLimits) {
+        for (let page = 1; page <= 100; page++) {
+          const key = `children:${parentId}:${userId}:${page}:${limit}`;
+          await this.cacheManager.del(key).catch(() => {}); // Ignore individual deletion errors
+        }
+      }
+    }
+  }
+
+  // Cập nhật các methods khác để xóa cache khi có thay đổi
+  // f
+
+  // Rename original move to existingMoveMethod
+  private async existingMoveMethod(nodeId: string, dto: MoveNodeDto, user: User): Promise<Node> {
+    const { newParentId } = dto;
+    const nodeToMoveId = new ObjectId(nodeId);
+    const newParentObjectId = newParentId ? new ObjectId(newParentId) : null;
+
+    // --- 1. LẤY DỮ LIỆU VÀ KIỂM TRA QUYỀN BAN ĐẦU ---
+    const [nodeToMove, newParentNode] = await Promise.all([
+      this.nodesRepository.findOne({ where: { _id: nodeToMoveId } }),
+      newParentObjectId ? this.nodesRepository.findOne({ where: { _id: newParentObjectId } }) : null,
+    ]);
+
+    if (!nodeToMove) {
+      throw new BusinessException(ErrorCode.NODE_NOT_FOUND, ErrorMessages.DOCUMENT_NOT_FOUND, 404);
+    }
+
+    if (newParentId && !newParentNode) {
+      throw new BusinessException(ErrorCode.NODE_NOT_FOUND, ErrorMessages.FOLDER_NOT_FOUND, 404);
+    }
+
+    if (newParentNode?.type !== NodeType.FOLDER) {
+      throw new BusinessException(ErrorCode.NODE_INVALID_TYPE, ErrorMessages.INVALID_DOCUMENT_TYPE, 400);
+    }
+
+    // Kiểm tra quyền trên node bị di chuyển (phải là Owner)
+    const canMove = await this.permissionsService.checkUserPermissionForNode(
+      user,
+      nodeToMove._id,
+      PermissionLevel.OWNER,
+    );
+
+    if (!canMove) {
+      throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.ONLY_OWNER_CAN_REVOKE, 403);
+    }
+
+    // Kiểm tra quyền trên thư mục đích (phải là Editor)
+    if (newParentNode) {
+      const canDrop = await this.permissionsService.checkUserPermissionForNode(
+        user,
+        newParentNode._id,
+        PermissionLevel.EDITOR,
+      );
+      if (!canDrop) {
+        throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.INSUFFICIENT_PERMISSIONS, 403);
+      }
+    }
+
+    // --- 2. NGĂN CHẶN DI CHUYỂN VÒNG LẶP ---
+    if (newParentNode) {
+      const isMovingIntoSelfOrDescendant =
+        newParentNode._id.equals(nodeToMoveId) ||
+        newParentNode.ancestors.some((ancestor) => ancestor._id.equals(nodeToMoveId));
+      if (isMovingIntoSelfOrDescendant) {
+        throw new BusinessException(
+          ErrorCode.NODE_CANNOT_MOVE,
+          "Không thể di chuyển một thư mục vào chính nó hoặc thư mục con của nó.",
+          400,
+        );
+      }
+    } // --- 3. CẬP NHẬT CẤU TRÚC CÂY ---
+
+    const oldAncestors = nodeToMove.ancestors;
+    const newAncestors = newParentNode
+      ? [...newParentNode.ancestors, { _id: newParentNode._id, name: newParentNode.name }]
+      : [];
+    const newLevel = newParentNode ? newParentNode.level + 1 : 0;
+
+    // Cập nhật node gốc được di chuyển
+    await this.nodesRepository.updateOne(
+      { _id: nodeToMoveId },
+      { $set: { parentId: newParentObjectId, ancestors: newAncestors, level: newLevel } },
+    );
+
+    // Cập nhật tất cả con cháu nếu node được di chuyển là một thư mục
+    if (nodeToMove.type === NodeType.FOLDER) {
+      const descendants = await this.nodesRepository.find({ where: { "ancestors._id": nodeToMoveId } });
+      if (descendants.length > 0) {
+        const bulkUpdateOps = descendants.map((descendant) => {
+          const newDescendantAncestors = [
+            ...newAncestors,
+            { _id: nodeToMove._id, name: nodeToMove.name },
+            ...descendant.ancestors.slice(oldAncestors.length + 1),
+          ];
+          const newDescendantLevel = newLevel + (descendant.level - nodeToMove.level);
+          return {
+            updateOne: {
+              filter: { _id: descendant._id },
+              update: { $set: { ancestors: newDescendantAncestors, level: newDescendantLevel } },
+            },
+          };
+        });
+        await this.nodesRepository.bulkWrite(bulkUpdateOps);
+      }
+    }
+
+    // Ghi log hoạt động
+    await this.activityLogProducer.logActivity({
+      userId: user._id,
+      action: ActivityAction.NODE_MOVED,
+      targetId: nodeToMoveId,
+      details: {
+        nodeName: nodeToMove.name,
+        type: nodeToMove.type,
+        oldParentId: nodeToMove.parentId,
+        newParentId: newParentObjectId,
+        movedBy: user.username,
+        movedAt: new Date(),
+      },
+    });
+
+    return this.nodesRepository.findOne({ where: { _id: nodeToMoveId } });
+  }
+
+  // Wrapper move method that calls existingMoveMethod
+  async move(nodeId: string, dto: MoveNodeDto, user: User): Promise<Node> {
+    const result = await this.existingMoveMethod(nodeId, dto, user);
+    await this.invalidateChildrenCache(result.parentId?.toString(), user._id.toString());
+    await this.invalidateChildrenCache(dto.newParentId, user._id.toString());
+    return result;
+  }
+
+  /**
+   * Finds all descendant nodes of a given node
+   * @param parentId The ObjectId of the parent node
+   * @returns Promise<Node[]> Array of descendant nodes
+   */
+  async findAllDescendants(parentId: ObjectId): Promise<Node[]> {
+    if (!parentId) {
+      return [];
+    }
+
+    return this.nodesRepository.find({
+      where: {
+        "ancestors._id": parentId,
+        deletedAt: null,
+      },
+      order: {
+        level: "ASC",
+        name: "ASC",
+      },
+    });
+  }
+
+  /**
+   * Finds a node by its ID
+   * @param nodeId The ID of the node to find
+   * @returns Promise<Node|null> The found node or null
+   */
+  async findNodeById(nodeId: ObjectId | string): Promise<Node | null> {
+    const objectId = typeof nodeId === "string" ? new ObjectId(nodeId) : nodeId;
+    return this.nodesRepository.findOne({
+      where: { _id: objectId },
+    });
+  }
+
+  /**
+   * Hàm trợ giúp: Tái cấu trúc một danh sách các node phẳng thành cấu trúc cây.
+   * @param nodes Danh sách node từ database
+   * @param rootId ID của node gốc để bắt đầu xây dựng cây
+   * @returns Mảng các TreeNodeDto cấp cao nhất
+   */
+  // private buildTreeFromFlatList(nodes: any[], rootId: ObjectId): TreeNodeDto[] {
+  //   const map = new Map<string, TreeNodeDto>();
+
+  //   // Khởi tạo tất cả các node vào map để tra cứu nhanh
+  //   nodes.forEach((node) => {
+  //     // Chuyển đổi object thô từ aggregation thành DTO
+  //     const nodeDto = plainToInstance(TreeNodeDto, { ...node, id: node._id, children: [] });
+  //     map.set(node._id.toHexString(), nodeDto);
+  //   });
+
+  //   const tree: TreeNodeDto[] = [];
+  //   for (const node of nodes) {
+  //     const nodeIdStr = node._id.toHexString();
+  //     const parentIdStr = node.parentId?.toHexString();
+
+  //     if (parentIdStr && map.has(parentIdStr)) {
+  //       // Nếu có cha, thêm node này vào mảng children của cha
+  //       map.get(parentIdStr)?.children.push(map.get(nodeIdStr)!);
+  //     } else if (node._id.equals(rootId)) {
+  //       // Nếu là node gốc của cây con đang xét, thêm vào kết quả cuối cùng
+  //       tree.push(map.get(nodeIdStr)!);
+  //     }
+  //   }
+
+  //   // Nếu cây rỗng nhưng map có node gốc (trường hợp thư mục rỗng)
+  //   if (tree.length === 0 && map.has(rootId.toHexString())) {
+  //     return [map.get(rootId.toHexString())!];
+  //   }
+
+  //   return tree;
+  // }
+
+  // async getTreeForUser(parentId: string | null, user: User): Promise<TreeNodeDto[]> {
+  //   const parentObjectId = parentId ? new ObjectId(parentId) : null;
+  //   let nodes: Node[];
+
+  //   // --- BƯỚC 1: KIỂM TRA QUYỀN TRUY CẬP VÀO THƯ MỤC CHA ---
+  //   // (Bỏ qua nếu là Root Admin hoặc đang xem ở cấp gốc)
+
+  //   if (user.role !== UserRole.ROOT_ADMIN && parentObjectId) {
+  //     const canViewParent = await this.permissionsService.checkUserPermissionForNode(
+  //       user,
+  //       parentObjectId,
+  //       PermissionLevel.VIEWER, // Chỉ cần ít nhất quyền xem
+  //     );
+
+  //     // Nếu không có quyền xem thư mục cha, ném lỗi Forbidden ngay lập tức.
+  //     if (!canViewParent) {
+  //       throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.ACCESS_DENIED, 403);
+  //     }
+  //   }
+  //   // --- 1. Lấy danh sách Node con mà User có quyền xem ---
+  //   if (user.role === UserRole.ROOT_ADMIN) {
+  //     nodes = await this.nodesRepository.find({ where: { parentId: parentObjectId } });
+  //   } else {
+  //     // Lấy tất cả các quyền của user
+  //     const userPermissions = await this.permissionsService.findAllForUser(user._id);
+  //     const accessibleNodeIds = userPermissions.map((p) => p.nodeId);
+
+  //     // Tìm các node con của parentId VÀ user có quyền truy cập
+  //     nodes = await this.nodesRepository.find({
+  //       where: {
+  //         parentId: parentObjectId,
+  //         _id: { $in: accessibleNodeIds },
+  //       },
+  //     });
+  //   }
+  //   if (nodes.length === 0) return []; // --- 2. Kiểm tra `hasChildren` và lấy quyền chi tiết hàng loạt ---
+
+  //   const nodeIds = nodes.map((n) => n._id); // Query để tìm những node nào trong danh sách trên có con
+
+  //   const nodesWithChildren = await this.nodesRepository.distinct("parentId", {
+  //     parentId: { $in: nodeIds },
+  //   });
+  //   const parentIdsWithChildren = new Set(nodesWithChildren.map((id) => id.toHexString())); // Lấy quyền chi tiết của user trên các node này
+
+  //   const permissions = await this.permissionsService.findUserPermissionsForNodes(user._id, nodeIds);
+  //   const permissionMap = new Map<string, PermissionLevel>();
+  //   permissions.forEach((p) => permissionMap.set(p.nodeId.toHexString(), p.permission)); // --- 3. Chuyển đổi sang DTO để trả về ---
+
+  //   const treeDtos = nodes.map(async (node) => {
+  //     const nodeIdString = node._id.toHexString();
+
+  //     let createdByUser;
+
+  //     if (node.createdBy) {
+  //       createdByUser = await this.usersService.findUserById(node.createdBy.toHexString());
+  //     }
+
+  //     return plainToInstance(TreeNodeDto, {
+  //       // Dùng plainToInstance để áp dụng decorator của DTO
+  //       id: node._id,
+  //       name: node.name,
+  //       type: node.type,
+  //       level: node.level,
+  //       hasChildren: parentIdsWithChildren.has(nodeIdString),
+  //       userPermission: permissionMap.get(nodeIdString) || null,
+  //       createdBy: node.createdBy ? createdByUser.username : "Người dùng cũ",
+  //     });
+  //   });
+
+  //   return await Promise.all(treeDtos);
+  // }
+
+  // async getChildrenNodeDirectly(parentId: string | null, user: User): Promise<any[]> {
+  //   console.time("getChildrentime: ");
+  //   const parentObjectId = parentId ? new ObjectId(parentId) : null;
+  //   const userId = user._id;
+
+  //   // --- BƯỚC 1: CHẠY AGGREGATION CHÍNH ĐỂ LẤY DỮ LIỆU NODE ---
+  //   const aggregationPipeline: any[] = [
+  //     // Các giai đoạn $match, $lookup, $addFields, $project giữ nguyên như trước...
+  //     { $match: { parentId: parentObjectId, deletedAt: null } },
+  //     {
+  //       $lookup: {
+  //         from: "permissions",
+  //         let: { nodeId: "$_id" },
+  //         pipeline: [{ $match: { $expr: { $and: [{ $eq: ["$nodeId", "$$nodeId"] }, { $eq: ["$userId", userId] }] } } }],
+  //         as: "userPermissionInfo",
+  //       },
+  //     },
+  //     {
+  //       $lookup: {
+  //         from: "users",
+  //         localField: "createdBy",
+  //         foreignField: "_id",
+  //         as: "creatorInfo",
+  //       },
+  //     },
+  //     {
+  //       $addFields: {
+  //         userPermission: { $ifNull: [{ $first: "$userPermissionInfo.permission" }, null] },
+  //         creatorUsername: { $ifNull: [{ $first: "$creatorInfo.username" }, "Người dùng cũ"] },
+  //       },
+  //     },
+  //   ];
+
+  //   if (user.role !== UserRole.ROOT_ADMIN) {
+  //     aggregationPipeline.push({ $match: { userPermission: { $ne: null } } });
+  //   }
+
+  //   aggregationPipeline.push({
+  //     $project: {
+  //       _id: 1,
+  //       name: 1,
+  //       type: 1,
+  //       parentId: 1,
+  //       level: 1,
+  //       userPermission: 1,
+  //       createdBy: "$creatorUsername",
+  //     },
+  //   });
+
+  //   const children = await this.nodesRepository.aggregate(aggregationPipeline).toArray();
+
+  //   if (children.length === 0) {
+  //     return [];
+  //   }
+
+  //   // --- BƯỚC 2: TÌM XEM NODE NÀO TRONG KẾT QUẢ CÓ CON ---
+
+  //   // Lấy ra tất cả ID của các node con vừa tìm được
+  //   const childrenIds = children.map((c) => c._id);
+
+  //   // Thực hiện 1 query phụ, rất nhanh để tìm tất cả các node là thư mục cha
+  //   const nodesThatAreParents = await this.nodesRepository.distinct("parentId", {
+  //     parentId: { $in: childrenIds },
+  //   });
+
+  //   // Chuyển kết quả thành một Set để tra cứu nhanh (O(1))
+  //   const parentIdsWithChildren = new Set(nodesThatAreParents.map((id) => id.toHexString()));
+
+  //   // --- BƯỚC 3: KẾT HỢP DỮ LIỆU ---
+
+  //   // Map qua kết quả và thêm trường `hasChildren`
+  //   const treeNodeDtos = children.map((c) => ({
+  //     ...c,
+  //     id: c._id,
+  //     // Nếu type là FILE thì chắc chắn không có con
+  //     // Nếu là FOLDER, kiểm tra xem ID của nó có trong Set ở trên không
+  //     hasChildren: c.type === NodeType.FOLDER && parentIdsWithChildren.has(c._id.toHexString()),
+  //   }));
+  //   console.timeEnd("getChildrentime: ");
+  //   return plainToInstance(TreeNodeDto, treeNodeDtos);
+  // }
+
+  // async getChildrenWithPagination(
+  //   parentId: string | null,
+  //   user: User,
+  //   paginationQuery: PaginationQueryDto,
+  // ): Promise<{ data: any; metadata: any }> {
+  //   // Tạo cache key dựa trên các tham số
+  //   const cacheKey = `children:${parentId}:${user._id}:${paginationQuery.page}:${paginationQuery.limit}`;
+
+  //   // Kiểm tra cache
+  //   const cachedData = await this.cacheManager.get<{ data: any; metadata: any }>(cacheKey);
+  //   if (cachedData) {
+  //     return cachedData;
+  //   }
+
+  //   const { page, limit } = paginationQuery;
+  //   const parentObjectId = parentId ? new ObjectId(parentId) : null;
+  //   const userId = user._id;
+  //   const skipAmount = (page - 1) * limit;
+
+  //   // --- BƯỚC 1: XÂY DỰNG PIPELINE CHÍNH ---
+  //   const aggregationPipeline: any[] = [
+  //     // Các giai đoạn lọc và join ban đầu
+  //     { $match: { parentId: parentObjectId, deletedAt: null } },
+  //     // ... các bước $lookup và $addFields để lấy quyền và tên người tạo như cũ ...
+  //     {
+  //       $lookup: {
+  //         from: "permissions",
+  //         let: { nodeId: "$_id" },
+  //         pipeline: [{ $match: { $expr: { $and: [{ $eq: ["$nodeId", "$$nodeId"] }, { $eq: ["$userId", userId] }] } } }],
+  //         as: "userPermissionInfo",
+  //         let: { nodeId: "$_id" },
+  //         pipeline: [{ $match: { $expr: { $and: [{ $eq: ["$nodeId", "$$nodeId"] }, { $eq: ["$userId", userId] }] } } }],
+  //         as: "userPermissionInfo",
+  //       },
+  //     },
+  //     { $lookup: { from: "users", localField: "createdBy", foreignField: "_id", as: "creatorInfo" } },
+  //     {
+  //       $addFields: {
+  //         userPermission: { $ifNull: [{ $first: "$userPermissionInfo.permission" }, null] },
+  //         creatorUsername: { $ifNull: [{ $first: "$creatorInfo.username" }, "Người dùng cũ"] },
+  //       },
+  //     },
+  //   ];
+
+  //   // Thêm bộ lọc quyền nếu không phải Root Admin
+  //   if (user.role !== UserRole.ROOT_ADMIN) {
+  //     aggregationPipeline.push({ $match: { userPermission: { $ne: null } } });
+  //   }
+
+  //   // --- BƯỚC 2: THÊM GIAI ĐOẠN $facet ĐỂ PHÂN TRANG VÀ ĐẾM ---
+  //   aggregationPipeline.push({
+  //     $facet: {
+  //       // Nhánh 1: Lấy dữ liệu cho trang hiện tại
+  //       data: [
+  //         { $sort: { type: 1, name: 1 } }, // Sắp xếp thư mục lên trước, rồi theo tên
+  //         { $skip: skipAmount },
+  //         { $limit: limit },
+  //         {
+  //           $project: {
+  //             _id: 1,
+  //             name: 1,
+  //             type: 1,
+  //             parentId: 1,
+  //             level: 1,
+  //             userPermission: 1,
+  //             createdBy: "$creatorUsername",
+  //           },
+  //         },
+  //       ],
+  //       // Nhánh 2: Lấy tổng số document
+  //       metadata: [{ $count: "total" }],
+  //     },
+  //   });
+
+  //   const results = await this.nodesRepository.aggregate(aggregationPipeline).toArray();
+  //   const paginatedResult = results[0]; // Kết quả nằm trong phần tử đầu tiên
+
+  //   if (!paginatedResult || paginatedResult.data.length === 0) {
+  //     const emptyResult = { data: [], metadata: { total: 0, page, limit } };
+  //     await this.cacheManager.set(cacheKey, emptyResult);
+  //     return emptyResult;
+  //   }
+
+  //   // --- BƯỚC 3: LẤY `hasChildren` CHO DỮ LIỆU CỦA TRANG HIỆN TẠI ---
+  //   const currentPageData = paginatedResult.data;
+  //   const currentPageIds = currentPageData.map((c) => c._id);
+  //   const nodesThatAreParents = await this.nodesRepository.distinct("parentId", { parentId: { $in: currentPageIds } });
+  //   const parentIdsWithChildren = new Set(nodesThatAreParents.map((id) => id.toHexString()));
+
+  //   // --- BƯỚC 4: KẾT HỢP VÀ TRẢ VỀ ---
+  //   const finalData = currentPageData.map((node) => ({
+  //     ...node,
+  //     id: node._id,
+  //     hasChildren: node.type === NodeType.FOLDER && parentIdsWithChildren.has(node._id.toHexString()),
+  //   }));
+
+  //   const metadata = {
+  //     total: paginatedResult.metadata[0]?.total || 0,
+  //     page,
+  //     limit,
+  //   };
+
+  //   const finalResult = {
+  //     data: plainToInstance(TreeNodeDto, finalData),
+  //     metadata,
+  //   };
+
+  //   // Lưu kết quả vào cache
+  //   await this.cacheManager.set(cacheKey, finalResult);
+
+  //   return finalResult;
+  // }
+
+  // /**
+  //  * [MỚI] Lấy thông tin chi tiết của một node (folder hoặc file)
+  //  * Hàm này dùng cho cả trang xem folder và trang xem file để lấy breadcrumb và content.
+  //  * @param nodeId ID của node cần lấy
+  //  * @param user User đang thực hiện yêu cầu
+  //  * @returns Toàn bộ entity Node
+  //  */
   async getNodeDetails(nodeId: string, user: User): Promise<NodeDetailsDto> {
     const nodeObjectId = new ObjectId(nodeId);
 
@@ -225,7 +1142,7 @@ export class NodesService {
     if (node.createdBy) {
       creator = await this.usersService.findUserById(node.createdBy.toHexString());
     }
-    
+
     //4. Lấy quyền của người dùng hiện tại trên node này
     const currentUserPermission = await this.permissionsService.getUserPermissionForNode(user._id, nodeObjectId);
 
@@ -239,7 +1156,6 @@ export class NodesService {
       createdBy: creator ? creator.username : "Người dùng cũ", // Ghi đè `createdBy` bằng username
       userPermission: currentUserPermission ? currentUserPermission.permission : null,
     });
-
 
     return nodeDetailData;
   }
@@ -392,6 +1308,11 @@ export class NodesService {
       },
     });
 
+    // Invalidate cache cho parent folder
+    if (nodeToUpdate.parentId) {
+      await this.invalidateChildrenCache(nodeToUpdate.parentId.toString(), user._id.toString());
+    }
+
     return nodeToUpdate;
   }
 
@@ -468,6 +1389,11 @@ export class NodesService {
       },
     }); // Trả về số lượng mục đã bị xóa để front-end có thể hiển thị thông báo
 
+    // Invalidate cache cho parent folder
+    if (nodeToDelete.parentId) {
+      await this.invalidateChildrenCache(nodeToDelete.parentId.toString(), user._id.toString());
+    }
+
     return { deletedCount: idsToDelete.length };
   }
   async softDelete(nodeId: string, user: User): Promise<{ deletedCount: number }> {
@@ -509,6 +1435,11 @@ export class NodesService {
         type: nodeToDelete.type,
       },
     });
+
+    // Invalidate cache cho parent folder của các node bị xóa
+    if (nodeToDelete.parentId) {
+      await this.invalidateChildrenCache(nodeToDelete.parentId.toString(), user._id.toString());
+    }
 
     return { deletedCount: idsToSoftDelete.length };
   }
@@ -611,158 +1542,12 @@ export class NodesService {
         type: nodeToRestore.type,
       },
     });
-    return this.nodesRepository.findOne({ where: { _id: nodeObjectId } });
-  }
 
-  async move(nodeId: string, dto: MoveNodeDto, user: User): Promise<Node> {
-    const { newParentId } = dto;
-    const nodeToMoveId = new ObjectId(nodeId);
-    const newParentObjectId = newParentId ? new ObjectId(newParentId) : null; 
-    
-    // --- 1. LẤY DỮ LIỆU VÀ KIỂM TRA QUYỀN BAN ĐẦU ---
-    const [nodeToMove, newParentNode] = await Promise.all([
-      this.nodesRepository.findOne({ where: { _id: nodeToMoveId } }),
-      newParentObjectId ? this.nodesRepository.findOne({ where: { _id: newParentObjectId } }) : null,
-    ]);
-    if (!nodeToMove) throw new BusinessException(ErrorCode.NODE_NOT_FOUND, ErrorMessages.DOCUMENT_NOT_FOUND, 404);
-
-    if (newParentId && !newParentNode)
-      throw new BusinessException(ErrorCode.NODE_NOT_FOUND, ErrorMessages.FOLDER_NOT_FOUND, 404);
-
-    if (newParentNode?.type !== NodeType.FOLDER) {
-      throw new BusinessException(ErrorCode.NODE_INVALID_TYPE, ErrorMessages.INVALID_DOCUMENT_TYPE, 400);
-    } // Kiểm tra quyền trên node bị di chuyển (phải là Owner)
-
-    const canMove = await this.permissionsService.checkUserPermissionForNode(
-      user,
-      nodeToMove._id,
-      PermissionLevel.OWNER,
-    );
-
-    if (!canMove) throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.ONLY_OWNER_CAN_REVOKE, 403); // Kiểm tra quyền trên thư mục đích (phải là Editor)
-
-    if (newParentNode) {
-      const canDrop = await this.permissionsService.checkUserPermissionForNode(
-        user,
-        newParentNode._id,
-        PermissionLevel.EDITOR,
-      );
-      if (!canDrop) throw new BusinessException(ErrorCode.NODE_FORBIDDEN, ErrorMessages.INSUFFICIENT_PERMISSIONS, 403);
+    // Invalidate cache cho parent folder
+    if (nodeToRestore.parentId) {
+      await this.invalidateChildrenCache(nodeToRestore.parentId.toString(), user._id.toString());
     }
 
-    // --- 2. NGĂN CHẶN DI CHUYỂN VÒNG LẶP ---
-    if (newParentNode) {
-      const isMovingIntoSelfOrDescendant =
-        newParentNode._id.equals(nodeToMoveId) ||
-        newParentNode.ancestors.some((ancestor) => ancestor._id.equals(nodeToMoveId));
-      if (isMovingIntoSelfOrDescendant) {
-        throw new BusinessException(
-          ErrorCode.NODE_CANNOT_MOVE,
-          "Không thể di chuyển một thư mục vào chính nó hoặc thư mục con của nó.",
-          400,
-        );
-      }
-    } // --- 3. BẮT ĐẦU TRANSACTION ---
-
-    await this.connection.transaction(async (transactionalEntityManager) => {
-      const nodeRepo = transactionalEntityManager.getMongoRepository(Node);
-      const permissionRepo = transactionalEntityManager.getMongoRepository(Permission); // --- 4. CẬP NHẬT CẤU TRÚC CÂY ---
-
-      const oldAncestors = nodeToMove.ancestors;
-      const newAncestors = newParentNode
-        ? [...newParentNode.ancestors, { _id: newParentNode._id, name: newParentNode.name }]
-        : [];
-      const newLevel = newParentNode ? newParentNode.level + 1 : 0; // Cập nhật node gốc được di chuyển
-
-      await nodeRepo.updateOne(
-        { _id: nodeToMoveId },
-        { $set: { parentId: newParentObjectId, ancestors: newAncestors, level: newLevel } },
-      ); // Cập nhật tất cả con cháu nếu node được di chuyển là một thư mục
-
-      if (nodeToMove.type === NodeType.FOLDER) {
-        const descendants = await nodeRepo.find({ where: { "ancestors._id": nodeToMoveId } });
-        if (descendants.length > 0) {
-          const bulkUpdateOps = descendants.map((descendant) => {
-            // Xây dựng lại mảng ancestors mới cho từng con cháu
-            const newDescendantAncestors = [
-              ...newAncestors,
-              { _id: nodeToMove._id, name: nodeToMove.name },
-              ...descendant.ancestors.slice(oldAncestors.length + 1),
-            ];
-            const newDescendantLevel = newLevel + (descendant.level - nodeToMove.level);
-            return {
-              updateOne: {
-                filter: { _id: descendant._id },
-                update: { $set: { ancestors: newDescendantAncestors, level: newDescendantLevel } },
-              },
-            };
-          });
-          await nodeRepo.bulkWrite(bulkUpdateOps);
-        }
-      } // --- 5. TÍNH TOÁN VÀ CẬP NHẬT LẠI QUYỀN OWNER KẾ THỪA ---
-
-      const nodesToUpdatePermissions = await nodeRepo.find({
-        where: { $or: [{ _id: nodeToMoveId }, { "ancestors._id": nodeToMoveId }] },
-      });
-      const newParentOwnerIds = newParentNode
-        ? await this.permissionsService.findOwnerIdsOfNode(newParentNode._id)
-        : [];
-
-      for (const node of nodesToUpdatePermissions) {
-        // Xóa tất cả quyền Owner cũ được kế thừa (giữ lại người tạo gốc)
-        await permissionRepo.deleteMany({
-          nodeId: node._id,
-          permission: PermissionLevel.OWNER,
-          userId: { $ne: node.createdBy },
-        }); // Gán lại quyền Owner mới từ cha
-        // Lọc ra những owner mới mà chưa phải là người tạo gốc
-
-        const ownersToGrant = newParentOwnerIds.filter((ownerId) => !ownerId.equals(node.createdBy));
-        if (ownersToGrant.length > 0) {
-          const grantPermissions = ownersToGrant.map((ownerId) => ({
-            userId: ownerId,
-            nodeId: node._id,
-            permission: PermissionLevel.OWNER,
-            grantedBy: user._id, // Người thực hiện hành động move
-            grantedAt: new Date(),
-          }));
-          await permissionRepo.insertMany(grantPermissions);
-        }
-      }
-    });
-
-    const movedNode = await this.nodesRepository.findOne({ where: { _id: nodeToMoveId } });
-
-    console.log("Chuẩn bị ghi log hoạt động...");
-    await this.activityLogProducer.logActivity({
-      userId: user._id,
-      action: ActivityAction.NODE_MOVED,
-      targetId: movedNode._id,
-      details: {
-        nodeName: movedNode.name,
-        type: movedNode.type,
-        fromParentId: nodeToMove.parentId,
-        toParentId: newParentId,
-        movedBy: user.username,
-        movedAt: new Date(),
-      },
-    }); // Trả về node đã được cập nhật thành công
-    console.log("Đã ghi log hoạt động thành công!");
-
-    return movedNode;
-  }
-  async findNodeById(nodeId: ObjectId): Promise<Node | null> {
-    return this.nodesRepository.findOne({ where: { _id: new ObjectId(nodeId) } });
-  }
-
-  async findAllDescendants(parentNodeId: string | ObjectId): Promise<Node[]> {
-    // Bước 1: Chuyển đổi an toàn parentNodeId sang kiểu ObjectId
-    // Dù đầu vào là string hay ObjectId, đầu ra luôn là ObjectId.
-    const parentObjectId = new ObjectId(parentNodeId);
-
-    // Bước 2: Thực hiện truy vấn với kiểu dữ liệu đã được đảm bảo
-    return this.nodesRepository.find({
-      where: { "ancestors._id": parentObjectId },
-    });
+    return this.nodesRepository.findOne({ where: { _id: nodeObjectId } });
   }
 }

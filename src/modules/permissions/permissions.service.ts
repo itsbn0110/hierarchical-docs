@@ -295,6 +295,7 @@ export class PermissionsService {
    */
   async grant(grantDto: GrantPermissionDto, granter: User): Promise<Permission> {
     const { userId, nodeId, permission } = grantDto;
+
     const granterId = granter._id;
     const targetNodeId = new ObjectId(nodeId);
     const targetUserId = new ObjectId(userId);
@@ -348,13 +349,13 @@ export class PermissionsService {
         ]);
 
         if (targetUser && node) {
-          await this.emailProducerService.sendPermissionGrantedEmail({
-            targetUserEmail: targetUser.email,
-            granterName: granter.username,
-            nodeName: node.name,
-            permissionLevel: savedPermission.permission,
-            loginUrl: this.configService.get<string>("FRONTEND_URL"),
-          });
+          // await this.emailProducerService.sendPermissionGrantedEmail({
+          //   targetUserEmail: targetUser.email,
+          //   granterName: granter.username,
+          //   nodeName: node.name,
+          //   permissionLevel: savedPermission.permission,
+          //   loginUrl: this.configService.get<string>("FRONTEND_URL"),
+          // });
         }
 
         await this.activityLogProducer.logActivity({

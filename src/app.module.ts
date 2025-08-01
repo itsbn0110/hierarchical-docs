@@ -3,6 +3,8 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { BullModule } from "@nestjs/bull";
 import { APP_FILTER } from "@nestjs/core";
+import { CacheModule } from "@nestjs/cache-manager";
+import * as redisStore from "cache-manager-redis-store";
 
 // --- BƯỚC 1: IMPORT TƯỜNG MINH TẤT CẢ CÁC ENTITY ---
 import { User } from "./modules/users/entities/user.entity";
@@ -24,6 +26,9 @@ import { ActivityLogModule } from "./modules/activity-log/activity-log.module";
 import { ScheduleModule } from "@nestjs/schedule";
 import { TasksModule } from "./modules/tasks/tasks.module";
 import { DatabaseLoggerService } from "./common/loggers/database-logger.service";
+import { SeedingCommand } from "./modules/seeding/seeding.command";
+import { SeedingModule } from "./modules/seeding/seeding.module";
+import { CommandModule } from "nestjs-command";
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -51,6 +56,17 @@ import { DatabaseLoggerService } from "./common/loggers/database-logger.service"
       useFactory: bullConfig,
     }),
     ScheduleModule.forRoot(),
+    CacheModule.registerAsync({
+      isGlobal: true,
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        store: redisStore,
+        host: configService.get("REDIS_HOST") || "localhost",
+        port: configService.get("REDIS_PORT") || 6379,
+        ttl: 60 * 5,
+      }),
+      inject: [ConfigService],
+    }),
     UsersModule,
     AuthModule,
     NodesModule,
@@ -59,13 +75,16 @@ import { DatabaseLoggerService } from "./common/loggers/database-logger.service"
     SearchModule,
     ActivityLogModule,
     TasksModule,
+    SeedingModule,
+    CommandModule,
   ],
   providers: [
     {
       provide: APP_FILTER,
       useClass: GlobalExceptionFilter,
     },
-    DatabaseLoggerService
+    DatabaseLoggerService,
+    SeedingCommand,
   ],
 })
 export class AppModule {}

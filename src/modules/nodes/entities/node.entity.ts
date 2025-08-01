@@ -1,4 +1,4 @@
-import { Entity, ObjectIdColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from "typeorm";
+import { Entity, ObjectIdColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, Index } from "typeorm";
 import { NodeType } from "src/common/enums/projects.enum";
 import { ObjectId } from "mongodb";
 import { IsInt, Min } from "class-validator";
@@ -36,11 +36,13 @@ export class Node {
   @Transform((params) => exposeBasedOnNodeType(NodeType.FILE, params))
   content?: string;
 
+  @Index()
   @Expose()
   @Column({ nullable: true })
   @Transform(transformObjectId)
   parentId: ObjectId | null;
 
+  @Index()
   @Expose()
   @Column({ default: [] })
   @Type(() => Ancestor)

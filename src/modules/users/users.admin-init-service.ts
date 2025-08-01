@@ -32,11 +32,19 @@ export class AdminInitService implements OnModuleInit {
       const password = this.configService.get<string>("ROOT_ADMIN_PASSWORD");
 
       if (existedEmail) {
-        throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS, ErrorMessages.EMAIL_ALREADY_EXISTS, HttpStatus.BAD_REQUEST);
+        throw new BusinessException(
+          ErrorCode.EMAIL_ALREADY_EXISTS,
+          ErrorMessages.EMAIL_ALREADY_EXISTS,
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
       if (!password) {
-        throw new BusinessException(ErrorCode.BAD_REQUEST, ErrorMessages.ROOTADMIN_ISNOT_DEFINED, HttpStatus.BAD_REQUEST);
+        throw new BusinessException(
+          ErrorCode.BAD_REQUEST,
+          ErrorMessages.ROOTADMIN_ISNOT_DEFINED,
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
       const hashPassword = await bcrypt.hash(password, 10);
@@ -47,7 +55,7 @@ export class AdminInitService implements OnModuleInit {
         hashPassword,
         role: UserRole.ROOT_ADMIN,
         isActive: true,
-        mustChangePassword: true,
+        mustChangePassword: false,
       });
 
       await this.userRepository.save(user);

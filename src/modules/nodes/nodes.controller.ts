@@ -25,6 +25,7 @@ import { TrashedItemDto } from "./dto/trashed-item.dto";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { UserRole } from "src/common/enums/projects.enum";
 import { Roles } from "../auth/decorators/roles.decorator";
+import { GetNodesQueryDto } from "./dto/get-node-query.dto";
 
 @ApiTags("Nodes - Quản lý Tài liệu & Thư mục")
 @ApiBearerAuth()
@@ -32,18 +33,32 @@ import { Roles } from "../auth/decorators/roles.decorator";
 export class NodesController {
   constructor(private readonly nodesService: NodesService) {}
 
+  // @Get()
+  // @ApiOperation({ summary: "Lấy các node con để hiển thị cây thư mục (lazy-loading)" })
+  // @ApiQuery({
+  //   name: "parentId",
+  //   required: false,
+  //   description: "ID của thư mục cha. Để trống để lấy các node ở cấp gốc.",
+  // })
+  // @ApiResponse({ status: 200, description: "Danh sách các node con.", type: [TreeNodeDto] })
+  // @ApiResponse({ status: 401, description: "Chưa xác thực hoặc token không hợp lệ." })
+  // @ApiResponse({ status: 403, description: "Không có quyền xem thư mục cha." })
+  // async getTree(@Query("parentId") parentId: string | null = null, @Req() req): Promise<TreeNodeDto[]> {
+  //   return this.nodesService.getTreeForUser(parentId, req.user);
+  // }
+
   @Get()
-  @ApiOperation({ summary: "Lấy các node con để hiển thị cây thư mục (lazy-loading)" })
+  @ApiOperation({ summary: "Lấy các node con theo phân trang (lazy-loading)" })
   @ApiQuery({
     name: "parentId",
     required: false,
     description: "ID của thư mục cha. Để trống để lấy các node ở cấp gốc.",
   })
-  @ApiResponse({ status: 200, description: "Danh sách các node con.", type: [TreeNodeDto] })
-  @ApiResponse({ status: 401, description: "Chưa xác thực hoặc token không hợp lệ." })
+  @ApiResponse({ status: 200, description: "Danh sách các node con đã phân trang." })
+  @ApiResponse({ status: 401, description: "Chưa xác thực." })
   @ApiResponse({ status: 403, description: "Không có quyền xem thư mục cha." })
-  getTree(@Query("parentId") parentId: string | null = null, @Req() req): Promise<TreeNodeDto[]> {
-    return this.nodesService.getTreeForUser(parentId, req.user);
+  getChildrenPaginated(@Query() query: GetNodesQueryDto, @Req() req) {
+    return this.nodesService.getSubtreeForUserOptimized(query.parentId ?? null, req.user);
   }
 
   @Get("trash")

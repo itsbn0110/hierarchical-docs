@@ -1,6 +1,6 @@
 import { transformObjectId } from "src/common/helpers/transform.helpers";
 import { NodeType, PermissionLevel } from "src/common/enums/projects.enum";
-import { Exclude, Expose, Transform } from "class-transformer";
+import { Exclude, Expose, Transform, Type } from "class-transformer"; // Thêm 'Type'
 import { ObjectId } from "mongodb";
 
 @Exclude()
@@ -29,4 +29,9 @@ export class TreeNodeDto {
 
   @Expose()
   createdBy: string;
+
+  // --- THÊM VÀO ĐÂY ---
+  @Expose()
+  @Type(() => TreeNodeDto) // Giúp class-transformer biết cách biến đổi các object con
+  children: TreeNodeDto[];
 }

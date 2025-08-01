@@ -1,4 +1,4 @@
-import { Entity, ObjectIdColumn, Column, CreateDateColumn } from "typeorm";
+import { Entity, ObjectIdColumn, Column, CreateDateColumn, Index } from "typeorm";
 import { ObjectId } from "mongodb";
 import { PermissionLevel } from "src/common/enums/projects.enum";
 import { Expose, Exclude, Transform } from "class-transformer";
@@ -12,11 +12,13 @@ export class Permission {
   @Expose()
   _id: ObjectId;
 
+  @Index()
   @Column()
   @Expose()
   @Transform(transformObjectId)
   userId: ObjectId;
 
+  @Index()
   @Column()
   @Expose()
   @Transform(transformObjectId)

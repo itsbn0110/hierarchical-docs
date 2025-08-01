@@ -33,12 +33,20 @@ export class UsersService {
   async create(createUserDto: CreateUserDto): Promise<UserResponseDto> {
     const existingUser = await this.userRepository.findOne({ where: { email: createUserDto.email } });
     if (existingUser) {
-      throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS, ErrorMessages.EMAIL_ALREADY_EXISTS, HttpStatus.BAD_REQUEST);
+      throw new BusinessException(
+        ErrorCode.EMAIL_ALREADY_EXISTS,
+        ErrorMessages.EMAIL_ALREADY_EXISTS,
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const existingUsername = await this.userRepository.findOne({ where: { username: createUserDto.username } });
     if (existingUsername) {
-      throw new BusinessException(ErrorCode.USERNAME_AREADY_EXISTS, ErrorMessages.USERNAME_AREADY_EXISTS, HttpStatus.BAD_REQUEST);
+      throw new BusinessException(
+        ErrorCode.USERNAME_AREADY_EXISTS,
+        ErrorMessages.USERNAME_AREADY_EXISTS,
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const temporaryPassword = randomBytes(8).toString("hex");
@@ -54,12 +62,12 @@ export class UsersService {
 
     const savedUser = await this.userRepository.save(user);
 
-    await this.emailProducerService.sendWelcomeEmail({
-      to: savedUser.email,
-      username: savedUser.username,
-      temporaryPassword: temporaryPassword,
-      loginUrl: this.configService.get<string>("FRONTEND_URL"),
-    });
+    // await this.emailProducerService.sendWelcomeEmail({
+    //   to: savedUser.email,
+    //   username: savedUser.username,
+    //   temporaryPassword: temporaryPassword,
+    //   loginUrl: this.configService.get<string>("FRONTEND_URL"),
+    // });
 
     return plainToInstance(UserResponseDto, savedUser);
   }
@@ -73,7 +81,11 @@ export class UsersService {
     if (dto.username && dto.username !== user.username) {
       const existing = await this.userRepository.findOne({ where: { username: dto.username } });
       if (existing) {
-        throw new BusinessException(ErrorCode.USERNAME_AREADY_EXISTS, ErrorMessages.USERNAME_AREADY_EXISTS, HttpStatus.BAD_REQUEST);
+        throw new BusinessException(
+          ErrorCode.USERNAME_AREADY_EXISTS,
+          ErrorMessages.USERNAME_AREADY_EXISTS,
+          HttpStatus.BAD_REQUEST,
+        );
       }
     }
 
@@ -166,7 +178,6 @@ export class UsersService {
     }
     await this.userRepository.update({ _id: userId }, updatePayload);
   }
-
 
   async findUserById(userId: string): Promise<User | null> {
     if (!ObjectId.isValid(userId)) {
